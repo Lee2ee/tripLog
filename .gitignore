@@ -1,0 +1,25 @@
+# ── IDE ─────────────────────────────────────────────
+.idea/
+*.iml
+.vscode/
+
+# ── Backend (Spring Boot / Gradle) ──────────────────
+backend/build/
+backend/.gradle/
+backend/out/
+backend/*.log
+backend/uploads/
+backend/src/main/resources/application-local.yml
+
+# ── Frontend (Node / Vite) ───────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+# ── OS ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Claude Code memory ──────────────────────────────
+.claude/
