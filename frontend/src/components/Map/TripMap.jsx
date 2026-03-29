@@ -1,13 +1,6 @@
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { GoogleMap, useJsApiLoader, InfoWindow } from '@react-google-maps/api';
-import {
-  Box, Typography, CircularProgress, Alert,
-  ToggleButton, ToggleButtonGroup, Tooltip,
-} from '@mui/material';
-import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
-import DirectionsWalkIcon from '@mui/icons-material/DirectionsWalk';
-import DirectionsTransitIcon from '@mui/icons-material/DirectionsTransit';
-import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike';
+import { Box, Typography, CircularProgress, Alert } from '@mui/material';
 import { calculateTotalDistance } from './haversine';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
@@ -21,15 +14,14 @@ const MAP_OPTIONS = {
   zoomControl: true,
 };
 
-const TRAVEL_MODES = [
-  { value: 'DRIVING',   label: '자동차',   icon: <DirectionsCarIcon fontSize="small" />,     color: '#1976d2' },
-  { value: 'WALKING',   label: '도보',     icon: <DirectionsWalkIcon fontSize="small" />,    color: '#388e3c' },
-  { value: 'TRANSIT',   label: '대중교통', icon: <DirectionsTransitIcon fontSize="small" />, color: '#f57c00' },
-  { value: 'BICYCLING', label: '자전거',   icon: <DirectionsBikeIcon fontSize="small" />,    color: '#7b1fa2' },
-];
+const MODE_COLOR = {
+  DRIVING:   '#1976d2',
+  WALKING:   '#388e3c',
+  TRANSIT:   '#f57c00',
+  BICYCLING: '#7b1fa2',
+};
 
-const getModeColor = (mode) =>
-  TRAVEL_MODES.find((m) => m.value === mode)?.color ?? '#1976d2';
+const getModeColor = (mode) => MODE_COLOR[mode] ?? '#1976d2';
 
 const applyBounds = (mapInstance, locs) => {
   if (!mapInstance || !window.google) return;
@@ -62,22 +54,17 @@ const syncMarkers = (mapInstance, locs, markersRef, onMarkerClick) => {
 
 const TripMap = ({ locations = [] }) => {
   const [selectedMarker, setSelectedMarker] = useState(null);
-  const [travelMode, setTravelMode] = useState('DRIVING');
   const [routeDistance, setRouteDistance] = useState(null);
   const [routeError, setRouteError] = useState(false);
 
   const mapRef = useRef(null);
   const markersRef = useRef([]);
-  // 렌더러·폴리라인 배열 (여러 세그먼트)
   const renderersRef = useRef([]);
   const fallbackPolysRef = useRef([]);
-  // 레이스 컨디션 방지: 현재 유효한 요청 번호
   const fetchGenRef = useRef(0);
 
   const locationsRef = useRef(locations);
-  const travelModeRef = useRef(travelMode);
   locationsRef.current = locations;
-  travelModeRef.current = travelMode;
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -96,7 +83,7 @@ const TripMap = ({ locations = [] }) => {
   }, []);
 
   // 세그먼트별 Directions API 호출
-  const fetchRoute = useCallback((mapInstance, locs, globalMode) => {
+  const fetchRoute = useCallback((mapInstance, locs) => {
     clearRoute();
     setRouteError(false);
 
@@ -105,15 +92,13 @@ const TripMap = ({ locations = [] }) => {
       return;
     }
 
-    // 이 호출의 고유 번호 — 나중에 호출된 것이 오면 이전 콜백은 무시
     const gen = ++fetchGenRef.current;
 
     const service = new window.google.maps.DirectionsService();
     const segments = locs.slice(1).map((dest, i) => ({
       origin: locs[i],
       dest,
-      // 장소에 저장된 이동 수단 우선, 없으면 글로벌 선택값 fallback
-      mode: dest.transportMode || globalMode,
+      mode: dest.transportMode || 'DRIVING',
     }));
 
     let completed = 0;
@@ -174,7 +159,7 @@ const TripMap = ({ locations = [] }) => {
   const onMapLoad = useCallback((mapInstance) => {
     mapRef.current = mapInstance;
     syncMarkers(mapInstance, locationsRef.current, markersRef, setSelectedMarker);
-    fetchRoute(mapInstance, locationsRef.current, travelModeRef.current);
+    fetchRoute(mapInstance, locationsRef.current);
     applyBounds(mapInstance, locationsRef.current);
   }, [fetchRoute]);
 
@@ -189,21 +174,15 @@ const TripMap = ({ locations = [] }) => {
   useEffect(() => {
     if (!mapRef.current) return;
     syncMarkers(mapRef.current, locations, markersRef, setSelectedMarker);
-    fetchRoute(mapRef.current, locations, travelModeRef.current);
+    fetchRoute(mapRef.current, locations);
     applyBounds(mapRef.current, locations);
   }, [locations, fetchRoute]);
 
-  // 이동 수단 변경 시
-  useEffect(() => {
-    if (!mapRef.current) return;
-    fetchRoute(mapRef.current, locationsRef.current, travelMode);
-  }, [travelMode, fetchRoute]);
-
   const straightDistance = calculateTotalDistance(locations);
   const distanceLabel = routeDistance
-    ? `총 ${routeDistance} km`
+    ? `총 이동 거리 ${routeDistance} km`
     : locations.length >= 2
-    ? `${straightDistance} km (직선)`
+    ? `총 이동 거리 ${straightDistance} km (직선)`
     : null;
 
   if (loadError) {
@@ -243,31 +222,8 @@ const TripMap = ({ locations = [] }) => {
 
   return (
     <Box>
-      {/* 이동 수단 선택 + 거리 */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.5, flexWrap: 'wrap' }}>
-        <ToggleButtonGroup
-          value={travelMode}
-          exclusive
-          onChange={(_, v) => { if (v) setTravelMode(v); }}
-          size="small"
-          sx={{ bgcolor: 'background.paper' }}
-        >
-          {TRAVEL_MODES.map((mode) => (
-            <Tooltip key={mode.value} title={`${mode.label} (이동 수단 미지정 구간에 적용)`} arrow>
-              <ToggleButton
-                value={mode.value}
-                sx={{
-                  px: 1.5,
-                  '&.Mui-selected': { color: mode.color, borderColor: mode.color },
-                }}
-              >
-                {mode.icon}
-              </ToggleButton>
-            </Tooltip>
-          ))}
-        </ToggleButtonGroup>
-
-        {distanceLabel && (
+      {distanceLabel && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5, flexWrap: 'wrap' }}>
           <Box
             sx={{
               display: 'inline-flex', alignItems: 'center',
@@ -278,14 +234,13 @@ const TripMap = ({ locations = [] }) => {
           >
             {distanceLabel}
           </Box>
-        )}
-
-        {routeError && (
-          <Typography variant="caption" color="text.secondary">
-            일부 구간 경로를 찾을 수 없어 직선으로 표시합니다
-          </Typography>
-        )}
-      </Box>
+          {routeError && (
+            <Typography variant="caption" color="text.secondary">
+              일부 구간 경로를 찾을 수 없어 직선으로 표시합니다
+            </Typography>
+          )}
+        </Box>
+      )}
 
       <GoogleMap
         mapContainerStyle={containerStyle}
