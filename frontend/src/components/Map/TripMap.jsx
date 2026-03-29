@@ -28,6 +28,9 @@ const TRAVEL_MODES = [
   { value: 'BICYCLING', label: '자전거',   icon: <DirectionsBikeIcon fontSize="small" />,    color: '#7b1fa2' },
 ];
 
+const getModeColor = (mode) =>
+  TRAVEL_MODES.find((m) => m.value === mode)?.color ?? '#1976d2';
+
 const applyBounds = (mapInstance, locs) => {
   if (!mapInstance || !window.google) return;
   if (locs.length === 0) {
@@ -60,13 +63,17 @@ const syncMarkers = (mapInstance, locs, markersRef, onMarkerClick) => {
 const TripMap = ({ locations = [] }) => {
   const [selectedMarker, setSelectedMarker] = useState(null);
   const [travelMode, setTravelMode] = useState('DRIVING');
-  const [routeDistance, setRouteDistance] = useState(null); // Directions API 실제 거리
-  const [routeError, setRouteError] = useState(false);      // 경로 조회 실패 여부
+  const [routeDistance, setRouteDistance] = useState(null);
+  const [routeError, setRouteError] = useState(false);
 
   const mapRef = useRef(null);
   const markersRef = useRef([]);
-  const rendererRef = useRef(null);   // DirectionsRenderer
-  const fallbackPolyRef = useRef(null); // 직선 폴리라인 (fallback)
+  // 렌더러·폴리라인 배열 (여러 세그먼트)
+  const renderersRef = useRef([]);
+  const fallbackPolysRef = useRef([]);
+  // 레이스 컨디션 방지: 현재 유효한 요청 번호
+  const fetchGenRef = useRef(0);
+
   const locationsRef = useRef(locations);
   const travelModeRef = useRef(travelMode);
   locationsRef.current = locations;
@@ -80,34 +87,15 @@ const TripMap = ({ locations = [] }) => {
     region: 'KR',
   });
 
-  // DirectionsRenderer·폴리라인 제거
+  // 모든 경로 오버레이 제거
   const clearRoute = useCallback(() => {
-    if (Array.isArray(rendererRef.current)) {
-      rendererRef.current.forEach((r) => r.setMap(null));
-    } else if (rendererRef.current) {
-      rendererRef.current.setMap(null);
-    }
-    rendererRef.current = [];
-    if (fallbackPolyRef.current) {
-      fallbackPolyRef.current.setMap(null);
-      fallbackPolyRef.current = null;
-    }
+    renderersRef.current.forEach((r) => r.setMap(null));
+    renderersRef.current = [];
+    fallbackPolysRef.current.forEach((p) => p.setMap(null));
+    fallbackPolysRef.current = [];
   }, []);
 
-  // 직선 폴리라인 (Directions API 실패 시 fallback)
-  const drawFallbackPolyline = useCallback((mapInstance, locs, color) => {
-    if (locs.length < 2) return;
-    fallbackPolyRef.current = new window.google.maps.Polyline({
-      map: mapInstance,
-      path: locs.map((l) => ({ lat: l.latitude, lng: l.longitude })),
-      strokeColor: color,
-      strokeOpacity: 0.6,
-      strokeWeight: 3,
-      geodesic: true,
-    });
-  }, []);
-
-  // 세그먼트별 Directions API 호출 → 이동 수단별 실제 경로
+  // 세그먼트별 Directions API 호출
   const fetchRoute = useCallback((mapInstance, locs, globalMode) => {
     clearRoute();
     setRouteError(false);
@@ -117,26 +105,36 @@ const TripMap = ({ locations = [] }) => {
       return;
     }
 
+    // 이 호출의 고유 번호 — 나중에 호출된 것이 오면 이전 콜백은 무시
+    const gen = ++fetchGenRef.current;
+
     const service = new window.google.maps.DirectionsService();
+    const segments = locs.slice(1).map((dest, i) => ({
+      origin: locs[i],
+      dest,
+      // 장소에 저장된 이동 수단 우선, 없으면 글로벌 선택값 fallback
+      mode: dest.transportMode || globalMode,
+    }));
+
+    let completed = 0;
     let totalMeters = 0;
-    let pendingCount = locs.length - 1;
     let hasError = false;
 
-    locs.slice(1).forEach((dest, i) => {
-      const origin = locs[i];
-      // 장소에 저장된 이동 수단 우선, 없으면 글로벌 선택 값 사용
-      const segMode = dest.transportMode || globalMode;
-      const modeConfig = TRAVEL_MODES.find((m) => m.value === segMode);
-      const color = modeConfig?.color ?? '#1976d2';
+    segments.forEach(({ origin, dest, mode }) => {
+      const color = getModeColor(mode);
 
       service.route(
         {
           origin: { lat: origin.latitude, lng: origin.longitude },
           destination: { lat: dest.latitude, lng: dest.longitude },
-          travelMode: window.google.maps.TravelMode[segMode],
+          travelMode: window.google.maps.TravelMode[mode],
         },
         (result, status) => {
-          pendingCount -= 1;
+          // 이미 새로운 fetchRoute가 호출됐으면 이 응답은 버림
+          if (fetchGenRef.current !== gen) return;
+
+          completed += 1;
+
           if (status === 'OK') {
             const renderer = new window.google.maps.DirectionsRenderer({
               map: mapInstance,
@@ -144,24 +142,33 @@ const TripMap = ({ locations = [] }) => {
               suppressMarkers: true,
               polylineOptions: { strokeColor: color, strokeOpacity: 0.85, strokeWeight: 5 },
             });
-            rendererRef.current = renderer; // 마지막 renderer 참조 유지 (cleanup용)
-            // 여러 renderer를 배열로 관리
-            if (!Array.isArray(rendererRef.current)) rendererRef.current = [];
-            if (Array.isArray(rendererRef.current)) rendererRef.current.push(renderer);
+            renderersRef.current.push(renderer);
             totalMeters += result.routes[0].legs[0].distance.value;
           } else {
             hasError = true;
-            drawFallbackPolyline(mapInstance, [origin, dest], color);
+            // 경로 없을 때 직선 fallback
+            const poly = new window.google.maps.Polyline({
+              map: mapInstance,
+              path: [
+                { lat: origin.latitude, lng: origin.longitude },
+                { lat: dest.latitude, lng: dest.longitude },
+              ],
+              strokeColor: color,
+              strokeOpacity: 0.5,
+              strokeWeight: 3,
+              geodesic: true,
+            });
+            fallbackPolysRef.current.push(poly);
           }
 
-          if (pendingCount === 0) {
+          if (completed === segments.length) {
             setRouteError(hasError);
             setRouteDistance(totalMeters > 0 ? (totalMeters / 1000).toFixed(1) : null);
           }
         }
       );
     });
-  }, [clearRoute, drawFallbackPolyline]);
+  }, [clearRoute]);
 
   const onMapLoad = useCallback((mapInstance) => {
     mapRef.current = mapInstance;
@@ -177,7 +184,7 @@ const TripMap = ({ locations = [] }) => {
     mapRef.current = null;
   }, [clearRoute]);
 
-  // locations 변경 (장소 추가/삭제)
+  // 장소 목록 변경 시
   useEffect(() => {
     if (!mapRef.current) return;
     syncMarkers(mapRef.current, locations, markersRef, setSelectedMarker);
@@ -185,7 +192,7 @@ const TripMap = ({ locations = [] }) => {
     applyBounds(mapRef.current, locations);
   }, [locations, fetchRoute]);
 
-  // 이동 수단 변경
+  // 이동 수단 변경 시
   useEffect(() => {
     if (!mapRef.current) return;
     fetchRoute(mapRef.current, locationsRef.current, travelMode);
@@ -233,11 +240,9 @@ const TripMap = ({ locations = [] }) => {
     );
   }
 
-  const activeMode = TRAVEL_MODES.find((m) => m.value === travelMode);
-
   return (
     <Box>
-      {/* 이동 수단 선택 + 거리 표시 */}
+      {/* 이동 수단 선택 + 거리 */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.5, flexWrap: 'wrap' }}>
         <ToggleButtonGroup
           value={travelMode}
@@ -247,7 +252,7 @@ const TripMap = ({ locations = [] }) => {
           sx={{ bgcolor: 'background.paper' }}
         >
           {TRAVEL_MODES.map((mode) => (
-            <Tooltip key={mode.value} title={mode.label} arrow>
+            <Tooltip key={mode.value} title={`${mode.label} (이동 수단 미지정 구간에 적용)`} arrow>
               <ToggleButton
                 value={mode.value}
                 sx={{
@@ -264,7 +269,7 @@ const TripMap = ({ locations = [] }) => {
         {distanceLabel && (
           <Box
             sx={{
-              display: 'inline-flex', alignItems: 'center', gap: 0.5,
+              display: 'inline-flex', alignItems: 'center',
               px: 2, py: 0.75,
               bgcolor: 'primary.main', color: 'white',
               borderRadius: 2, fontSize: '0.875rem', fontWeight: 'bold',
@@ -276,7 +281,7 @@ const TripMap = ({ locations = [] }) => {
 
         {routeError && (
           <Typography variant="caption" color="text.secondary">
-            경로를 찾을 수 없어 직선으로 표시합니다
+            일부 구간 경로를 찾을 수 없어 직선으로 표시합니다
           </Typography>
         )}
       </Box>
