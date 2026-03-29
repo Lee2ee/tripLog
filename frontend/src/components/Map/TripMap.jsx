@@ -140,6 +140,7 @@ const TripMap = ({ locations = [] }) => {
               map: mapInstance,
               directions: result,
               suppressMarkers: true,
+              preserveViewport: true,  // fitBounds가 설정한 뷰포트를 덮어쓰지 않음
               polylineOptions: { strokeColor: color, strokeOpacity: 0.85, strokeWeight: 5 },
             });
             renderersRef.current.push(renderer);
