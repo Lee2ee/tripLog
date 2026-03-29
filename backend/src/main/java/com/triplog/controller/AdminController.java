@@ -1,14 +1,13 @@
 package com.triplog.controller;
 
+import com.triplog.dto.request.AdminCreateTripRequest;
 import com.triplog.dto.request.AdminUpdateUserRequest;
 import com.triplog.dto.request.TripRequest;
-import com.triplog.dto.response.ApiResponse;
-import com.triplog.dto.response.ImageResponse;
-import com.triplog.dto.response.TripResponse;
-import com.triplog.dto.response.UserResponse;
+import com.triplog.dto.response.*;
 import com.triplog.service.AdminService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -23,6 +22,13 @@ import java.util.Map;
 public class AdminController {
 
     private final AdminService adminService;
+
+    // ── 대시보드 통계 ──────────────────────────────────────────────────
+
+    @GetMapping("/stats")
+    public ResponseEntity<ApiResponse<AdminStatsResponse>> getStats() {
+        return ResponseEntity.ok(ApiResponse.success(adminService.getStats()));
+    }
 
     // ── 회원 관리 ──────────────────────────────────────────────────────
 
@@ -47,8 +53,7 @@ public class AdminController {
     public ResponseEntity<ApiResponse<UserResponse>> updateUserRole(
             @PathVariable Long userId,
             @RequestBody Map<String, String> body) {
-        String role = body.get("role");
-        return ResponseEntity.ok(ApiResponse.success(adminService.updateUserRole(userId, role)));
+        return ResponseEntity.ok(ApiResponse.success(adminService.updateUserRole(userId, body.get("role"))));
     }
 
     @DeleteMapping("/users/{userId}")
@@ -67,6 +72,14 @@ public class AdminController {
     @GetMapping("/trips/{tripId}")
     public ResponseEntity<ApiResponse<TripResponse>> getTripById(@PathVariable Long tripId) {
         return ResponseEntity.ok(ApiResponse.success(adminService.getTripById(tripId)));
+    }
+
+    @PostMapping("/trips")
+    public ResponseEntity<ApiResponse<TripResponse>> createTrip(
+            @Valid @RequestBody AdminCreateTripRequest request) {
+        TripResponse response = adminService.createTrip(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("여행이 등록되었습니다.", response));
     }
 
     @PutMapping("/trips/{tripId}")

@@ -21,4 +21,15 @@ public class TripResponse {
     private LocalDateTime createdAt;
     private List<TripDayResponse> tripDays;
     private List<ImageResponse> images;
+    // populated in admin context only
+    private String userEmail;
+    private String userNickname;
+    // visibility
+    private Boolean isPublic;
+    // collaboration fields
+    private Long ownerId;
+    private String ownerNickname;
+    private Boolean isOwner;
+    private int memberCount;
+    private List<TripMemberResponse> members;
 }

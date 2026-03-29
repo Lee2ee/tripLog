@@ -1,10 +1,12 @@
 package com.triplog.service;
 
+import com.triplog.dto.request.AdminCreateTripRequest;
 import com.triplog.dto.request.AdminUpdateUserRequest;
 import com.triplog.dto.request.TripRequest;
 import com.triplog.dto.response.*;
 import com.triplog.entity.Role;
 import com.triplog.entity.Trip;
+import com.triplog.entity.TripDay;
 import com.triplog.entity.TripImage;
 import com.triplog.entity.User;
 import com.triplog.exception.CustomException;
@@ -15,7 +17,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -29,6 +34,65 @@ public class AdminService {
     private final LocationRepository locationRepository;
     private final TripImageRepository tripImageRepository;
     private final PasswordEncoder passwordEncoder;
+
+    // ── 대시보드 통계 ──────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public AdminStatsResponse getStats() {
+        long totalUsers = userRepository.count();
+        long totalTrips = tripRepository.count();
+        long totalImages = tripImageRepository.count();
+
+        List<Trip> allTrips = tripRepository.findAll();
+        List<User> allUsers = userRepository.findAll();
+
+        List<AdminStatsResponse.MonthlyCount> tripsPerMonth = buildMonthlyStats(
+                allTrips.stream().map(Trip::getCreatedAt).collect(Collectors.toList()), 6);
+
+        List<AdminStatsResponse.MonthlyCount> usersPerMonth = buildMonthlyStats(
+                allUsers.stream().map(User::getCreatedAt).collect(Collectors.toList()), 6);
+
+        Map<Long, Long> tripCountByUser = allTrips.stream()
+                .collect(Collectors.groupingBy(t -> t.getUser().getId(), Collectors.counting()));
+
+        List<AdminStatsResponse.TopUser> topUsers = allUsers.stream()
+                .map(u -> AdminStatsResponse.TopUser.builder()
+                        .nickname(u.getNickname())
+                        .email(u.getEmail())
+                        .tripCount(tripCountByUser.getOrDefault(u.getId(), 0L))
+                        .build())
+                .sorted(Comparator.comparingLong(AdminStatsResponse.TopUser::getTripCount).reversed())
+                .limit(5)
+                .collect(Collectors.toList());
+
+        return AdminStatsResponse.builder()
+                .totalUsers(totalUsers)
+                .totalTrips(totalTrips)
+                .totalImages(totalImages)
+                .tripsPerMonth(tripsPerMonth)
+                .usersPerMonth(usersPerMonth)
+                .topUsers(topUsers)
+                .build();
+    }
+
+    private List<AdminStatsResponse.MonthlyCount> buildMonthlyStats(List<LocalDateTime> dates, int months) {
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM");
+        LocalDateTime cutoff = LocalDateTime.now().minusMonths(months);
+
+        Map<String, Long> counts = new LinkedHashMap<>();
+        for (int i = months - 1; i >= 0; i--) {
+            counts.put(LocalDateTime.now().minusMonths(i).format(fmt), 0L);
+        }
+
+        dates.stream()
+                .filter(d -> d != null && d.isAfter(cutoff))
+                .forEach(d -> counts.merge(d.format(fmt), 1L, Long::sum));
+
+        return counts.entrySet().stream()
+                .map(e -> AdminStatsResponse.MonthlyCount.builder()
+                        .month(e.getKey()).count(e.getValue()).build())
+                .collect(Collectors.toList());
+    }
 
     // ── 회원 관리 ──────────────────────────────────────────────────────
 
@@ -51,7 +115,6 @@ public class AdminService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> CustomException.notFound("User not found: " + userId));
 
-        // 이메일 중복 체크 (자기 자신 제외)
         userRepository.findByEmail(request.getEmail())
                 .filter(existing -> !existing.getId().equals(userId))
                 .ifPresent(existing -> { throw CustomException.conflict("이미 사용 중인 이메일입니다."); });
@@ -124,6 +187,35 @@ public class AdminService {
     }
 
     @Transactional
+    public TripResponse createTrip(AdminCreateTripRequest request) {
+        if (request.getEndDate().isBefore(request.getStartDate())) {
+            throw CustomException.badRequest("종료일은 시작일 이후여야 합니다.");
+        }
+
+        User user = userRepository.findById(request.getUserId())
+                .orElseThrow(() -> CustomException.notFound("User not found: " + request.getUserId()));
+
+        Trip trip = Trip.builder()
+                .user(user)
+                .title(request.getTitle())
+                .startDate(request.getStartDate())
+                .endDate(request.getEndDate())
+                .build();
+        trip = tripRepository.save(trip);
+
+        List<TripDay> tripDays = new ArrayList<>();
+        LocalDate current = request.getStartDate();
+        while (!current.isAfter(request.getEndDate())) {
+            tripDays.add(TripDay.builder().trip(trip).date(current).build());
+            current = current.plusDays(1);
+        }
+        tripDayRepository.saveAll(tripDays);
+
+        log.info("Admin created trip '{}' for user: {}", trip.getTitle(), user.getEmail());
+        return mapToTripSummary(trip);
+    }
+
+    @Transactional
     public TripResponse updateTrip(Long tripId, TripRequest request) {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> CustomException.notFound("Trip not found: " + tripId));
@@ -174,6 +266,8 @@ public class AdminService {
                 .startDate(trip.getStartDate())
                 .endDate(trip.getEndDate())
                 .createdAt(trip.getCreatedAt())
+                .userEmail(trip.getUser().getEmail())
+                .userNickname(trip.getUser().getNickname())
                 .tripDays(List.of())
                 .images(List.of())
                 .build();
@@ -210,6 +304,8 @@ public class AdminService {
                 .startDate(trip.getStartDate())
                 .endDate(trip.getEndDate())
                 .createdAt(trip.getCreatedAt())
+                .userEmail(trip.getUser().getEmail())
+                .userNickname(trip.getUser().getNickname())
                 .tripDays(days)
                 .images(images)
                 .build();

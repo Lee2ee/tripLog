@@ -1,51 +1,108 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { GoogleMap, useJsApiLoader, Marker, Polyline, InfoWindow } from '@react-google-maps/api';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
+import { GoogleMap, useJsApiLoader, InfoWindow } from '@react-google-maps/api';
 import { Box, Typography, CircularProgress, Alert } from '@mui/material';
 import { calculateTotalDistance } from './haversine';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
-
-const containerStyle = {
-  width: '100%',
-  height: '450px',
-  borderRadius: '8px',
+const LIBRARIES = ['places'];
+const KOREA_CENTER = { lat: 36.5, lng: 127.5 };
+const containerStyle = { width: '100%', height: '450px', borderRadius: '8px' };
+const MAP_OPTIONS = {
+  streetViewControl: false,
+  mapTypeControl: false,
+  fullscreenControl: true,
+  zoomControl: true,
 };
 
-const defaultCenter = { lat: 37.5665, lng: 126.9780 }; // 서울
+const applyBounds = (mapInstance, locs) => {
+  if (!mapInstance || !window.google) return;
+  if (locs.length === 0) {
+    mapInstance.setCenter(KOREA_CENTER);
+    mapInstance.setZoom(7);
+  } else if (locs.length === 1) {
+    mapInstance.setCenter({ lat: locs[0].latitude, lng: locs[0].longitude });
+    mapInstance.setZoom(14);
+  } else {
+    const bounds = new window.google.maps.LatLngBounds();
+    locs.forEach((loc) => bounds.extend({ lat: loc.latitude, lng: loc.longitude }));
+    mapInstance.fitBounds(bounds, { top: 60, right: 60, bottom: 60, left: 60 });
+  }
+};
+
+// Marker/Polyline을 직접(imperative) 생성·갱신
+const syncOverlays = (mapInstance, locs, markersRef, polylineRef, onMarkerClick) => {
+  if (!mapInstance || !window.google) return;
+
+  // 기존 마커 제거
+  markersRef.current.forEach((m) => m.setMap(null));
+  markersRef.current = [];
+
+  // 새 마커 생성
+  markersRef.current = locs.map((loc, index) => {
+    const marker = new window.google.maps.Marker({
+      map: mapInstance,
+      position: { lat: loc.latitude, lng: loc.longitude },
+      label: { text: String(index + 1), color: 'white', fontWeight: 'bold', fontSize: '13px' },
+    });
+    marker.addListener('click', () => onMarkerClick(loc));
+    return marker;
+  });
+
+  // 폴리라인 갱신
+  if (polylineRef.current) {
+    polylineRef.current.setMap(null);
+    polylineRef.current = null;
+  }
+  if (locs.length >= 2) {
+    polylineRef.current = new window.google.maps.Polyline({
+      map: mapInstance,
+      path: locs.map((loc) => ({ lat: loc.latitude, lng: loc.longitude })),
+      strokeColor: '#1976d2',
+      strokeOpacity: 0.85,
+      strokeWeight: 4,
+      geodesic: true,
+    });
+  }
+};
 
 const TripMap = ({ locations = [] }) => {
   const [selectedMarker, setSelectedMarker] = useState(null);
   const mapRef = useRef(null);
+  const markersRef = useRef([]);
+  const polylineRef = useRef(null);
+  const locationsRef = useRef(locations);
+  locationsRef.current = locations;
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: GOOGLE_MAPS_API_KEY,
+    libraries: LIBRARIES,
+    language: 'ko',
+    region: 'KR',
   });
 
-  const onMapLoad = useCallback((map) => {
-    mapRef.current = map;
+  const onMapLoad = useCallback((mapInstance) => {
+    mapRef.current = mapInstance;
+    syncOverlays(mapInstance, locationsRef.current, markersRef, polylineRef, setSelectedMarker);
+    applyBounds(mapInstance, locationsRef.current);
+  }, []);
 
-    if (locations.length > 0) {
-      const bounds = new window.google.maps.LatLngBounds();
-      locations.forEach((loc) => {
-        bounds.extend({ lat: loc.latitude, lng: loc.longitude });
-      });
-      map.fitBounds(bounds);
-      if (locations.length === 1) {
-        map.setZoom(14);
-      }
+  const onMapUnmount = useCallback(() => {
+    markersRef.current.forEach((m) => m.setMap(null));
+    markersRef.current = [];
+    if (polylineRef.current) {
+      polylineRef.current.setMap(null);
+      polylineRef.current = null;
     }
+    mapRef.current = null;
+  }, []);
+
+  // locations 변경 시 오버레이 재생성
+  useEffect(() => {
+    if (!mapRef.current) return;
+    syncOverlays(mapRef.current, locations, markersRef, polylineRef, setSelectedMarker);
+    applyBounds(mapRef.current, locations);
   }, [locations]);
-
-  const mapCenter =
-    locations.length > 0
-      ? { lat: locations[0].latitude, lng: locations[0].longitude }
-      : defaultCenter;
-
-  const polylinePath = locations.map((loc) => ({
-    lat: loc.latitude,
-    lng: loc.longitude,
-  }));
 
   const totalDistance = calculateTotalDistance(locations);
 
@@ -69,16 +126,9 @@ const TripMap = ({ locations = [] }) => {
     return (
       <Box
         sx={{
-          height: 200,
-          bgcolor: 'grey.100',
-          borderRadius: 2,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          border: '2px dashed',
-          borderColor: 'grey.300',
-          p: 3,
+          height: 200, bgcolor: 'grey.100', borderRadius: 2,
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', border: '2px dashed', borderColor: 'grey.300', p: 3,
         }}
       >
         <Typography variant="body1" color="text.secondary" fontWeight="bold">
@@ -101,16 +151,10 @@ const TripMap = ({ locations = [] }) => {
       {locations.length >= 2 && (
         <Box
           sx={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            px: 2,
-            py: 0.75,
-            mb: 1.5,
-            bgcolor: 'primary.light',
-            color: 'primary.contrastText',
-            borderRadius: 2,
-            fontSize: '0.875rem',
-            fontWeight: 'bold',
+            display: 'inline-flex', alignItems: 'center',
+            px: 2, py: 0.75, mb: 1.5,
+            bgcolor: 'primary.light', color: 'primary.contrastText',
+            borderRadius: 2, fontSize: '0.875rem', fontWeight: 'bold',
           }}
         >
           총 이동 거리: {totalDistance} km
@@ -119,51 +163,19 @@ const TripMap = ({ locations = [] }) => {
 
       <GoogleMap
         mapContainerStyle={containerStyle}
-        center={mapCenter}
-        zoom={locations.length === 0 ? 6 : 12}
+        center={KOREA_CENTER}
+        zoom={7}
+        options={MAP_OPTIONS}
         onLoad={onMapLoad}
-        options={{
-          streetViewControl: false,
-          mapTypeControl: false,
-          fullscreenControl: true,
-          zoomControl: true,
-        }}
+        onUnmount={onMapUnmount}
       >
-        {locations.map((loc, index) => (
-          <Marker
-            key={loc.id || index}
-            position={{ lat: loc.latitude, lng: loc.longitude }}
-            label={{
-              text: String(index + 1),
-              color: 'white',
-              fontWeight: 'bold',
-              fontSize: '13px',
-            }}
-            onClick={() => setSelectedMarker(loc)}
-          />
-        ))}
-
-        {polylinePath.length >= 2 && (
-          <Polyline
-            path={polylinePath}
-            options={{
-              strokeColor: '#1976d2',
-              strokeOpacity: 0.85,
-              strokeWeight: 4,
-              geodesic: true,
-            }}
-          />
-        )}
-
         {selectedMarker && (
           <InfoWindow
             position={{ lat: selectedMarker.latitude, lng: selectedMarker.longitude }}
             onCloseClick={() => setSelectedMarker(null)}
           >
             <Box>
-              <Typography variant="subtitle2" fontWeight="bold">
-                {selectedMarker.name}
-              </Typography>
+              <Typography variant="subtitle2" fontWeight="bold">{selectedMarker.name}</Typography>
               <Typography variant="caption" color="text.secondary">
                 {selectedMarker.latitude.toFixed(6)}, {selectedMarker.longitude.toFixed(6)}
               </Typography>

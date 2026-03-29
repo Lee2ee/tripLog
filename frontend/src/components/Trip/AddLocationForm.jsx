@@ -1,81 +1,84 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
-  Box,
-  TextField,
-  Button,
-  Paper,
-  Typography,
-  CircularProgress,
-  Alert,
-  Divider,
+  Box, TextField, Button, Paper, Typography, CircularProgress,
+  Alert, Divider, MenuItem, Chip,
 } from '@mui/material';
+import { Autocomplete, useJsApiLoader } from '@react-google-maps/api';
 import AddLocationAltIcon from '@mui/icons-material/AddLocationAlt';
+import SearchIcon from '@mui/icons-material/Search';
+
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+const LIBRARIES = ['places'];
+
+const CATEGORIES = [
+  { value: '관광지', emoji: '🏛️' },
+  { value: '맛집',  emoji: '🍽️' },
+  { value: '쇼핑',  emoji: '🛍️' },
+  { value: '숙박',  emoji: '🏨' },
+  { value: '교통',  emoji: '🚉' },
+  { value: '기타',  emoji: '📍' },
+];
 
 const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) => {
-  const [formData, setFormData] = useState({
-    name: '',
-    latitude: '',
-    longitude: '',
-    orderIndex: existingCount + 1,
-  });
-  const [errors, setErrors] = useState({});
+  const autocompleteRef = useRef(null);
+
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('');
+  const [memo, setMemo] = useState('');
+  const [pin, setPin] = useState(null); // { lat, lng }
+  const [nameError, setNameError] = useState('');
+  const [pinError, setPinError] = useState('');
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  const validate = () => {
-    const newErrors = {};
-    if (!formData.name.trim()) newErrors.name = '장소 이름을 입력해주세요';
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
+    libraries: LIBRARIES,
+    language: 'ko',
+    region: 'KR',
+  });
 
-    const lat = parseFloat(formData.latitude);
-    if (!formData.latitude) newErrors.latitude = '위도를 입력해주세요';
-    else if (isNaN(lat) || lat < -90 || lat > 90)
-      newErrors.latitude = '위도는 -90 ~ 90 사이여야 합니다';
+  const onPlaceChanged = useCallback(() => {
+    const place = autocompleteRef.current?.getPlace();
+    if (!place?.geometry) return;
 
-    const lng = parseFloat(formData.longitude);
-    if (!formData.longitude) newErrors.longitude = '경도를 입력해주세요';
-    else if (isNaN(lng) || lng < -180 || lng > 180)
-      newErrors.longitude = '경도는 -180 ~ 180 사이여야 합니다';
-
-    return newErrors;
-  };
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }));
-  };
+    const lat = place.geometry.location.lat();
+    const lng = place.geometry.location.lng();
+    setPin({ lat, lng });
+    setName(place.name || '');
+    setPinError('');
+    setNameError('');
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const validationErrors = validate();
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
+    let valid = true;
+    if (!name.trim()) { setNameError('장소 이름을 입력해주세요'); valid = false; }
+    if (!pin) { setPinError('장소를 검색해서 선택해주세요'); valid = false; }
+    if (!valid) return;
 
     setLoading(true);
     setSuccessMsg('');
     setErrorMsg('');
-
     try {
-      const payload = {
-        name: formData.name.trim(),
-        latitude: parseFloat(formData.latitude),
-        longitude: parseFloat(formData.longitude),
-        orderIndex: parseInt(formData.orderIndex),
-      };
-      await onLocationAdded(payload);
-      setSuccessMsg(`"${formData.name}" 장소가 추가되었습니다!`);
-      setFormData({
-        name: '',
-        latitude: '',
-        longitude: '',
-        orderIndex: existingCount + 2,
+      await onLocationAdded({
+        name: name.trim(),
+        latitude: pin.lat,
+        longitude: pin.lng,
+        orderIndex: existingCount + 1,
+        category: category || null,
+        memo: memo.trim() || null,
       });
+      setSuccessMsg(`"${name}" 장소가 추가되었습니다!`);
+      setName('');
+      setCategory('');
+      setMemo('');
+      setPin(null);
       setTimeout(() => setSuccessMsg(''), 3000);
-    } catch (error) {
-      setErrorMsg(error.response?.data?.message || '장소 추가에 실패했습니다');
+    } catch (err) {
+      setErrorMsg(err.response?.data?.message || '장소 추가에 실패했습니다');
     } finally {
       setLoading(false);
     }
@@ -85,80 +88,94 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
     <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
         <AddLocationAltIcon color="primary" />
-        <Typography variant="subtitle1" fontWeight="bold">
-          장소 추가
-        </Typography>
+        <Typography variant="subtitle1" fontWeight="bold">장소 추가</Typography>
       </Box>
       <Divider sx={{ mb: 2 }} />
 
-      {successMsg && (
-        <Alert severity="success" sx={{ mb: 2 }}>
-          {successMsg}
-        </Alert>
-      )}
-      {errorMsg && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErrorMsg('')}>
-          {errorMsg}
-        </Alert>
-      )}
+      {successMsg && <Alert severity="success" sx={{ mb: 2 }}>{successMsg}</Alert>}
+      {errorMsg && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErrorMsg('')}>{errorMsg}</Alert>}
 
       <Box component="form" onSubmit={handleSubmit}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+
+          {/* Google Places 검색 */}
+          {isLoaded ? (
+            <Autocomplete
+              onLoad={(ac) => { autocompleteRef.current = ac; }}
+              onPlaceChanged={onPlaceChanged}
+              options={{ fields: ['name', 'geometry'] }}
+            >
+              <TextField
+                label="장소 검색"
+                value={name}
+                onChange={(e) => { setName(e.target.value); setNameError(''); setPin(null); }}
+                error={!!nameError || !!pinError}
+                helperText={nameError || pinError || 'Google에서 장소를 검색하면 좌표가 자동 입력됩니다'}
+                size="small"
+                fullWidth
+                placeholder="예: 경복궁, 명동 칼국수..."
+                InputProps={{
+                  startAdornment: <SearchIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} />,
+                }}
+              />
+            </Autocomplete>
+          ) : (
+            <TextField
+              label="장소 이름"
+              value={name}
+              onChange={(e) => { setName(e.target.value); setNameError(''); }}
+              error={!!nameError}
+              helperText={nameError}
+              size="small"
+              fullWidth
+              placeholder="예: 경복궁"
+            />
+          )}
+
+          {/* 선택된 좌표 표시 */}
+          {pin && (
+            <Chip
+              label={`📌 ${pin.lat.toFixed(5)}, ${pin.lng.toFixed(5)}`}
+              size="small"
+              color="success"
+              variant="outlined"
+              sx={{ alignSelf: 'flex-start', fontFamily: 'monospace' }}
+            />
+          )}
+
+          {/* 카테고리 */}
           <TextField
-            label="장소 이름"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            error={!!errors.name}
-            helperText={errors.name}
+            select
+            label="카테고리 (선택)"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
             size="small"
             fullWidth
-            placeholder="예: 경복궁"
-          />
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <TextField
-              label="위도"
-              name="latitude"
-              value={formData.latitude}
-              onChange={handleChange}
-              error={!!errors.latitude}
-              helperText={errors.latitude}
-              size="small"
-              type="number"
-              inputProps={{ step: 'any', min: -90, max: 90 }}
-              placeholder="예: 37.5796"
-              fullWidth
-            />
-            <TextField
-              label="경도"
-              name="longitude"
-              value={formData.longitude}
-              onChange={handleChange}
-              error={!!errors.longitude}
-              helperText={errors.longitude}
-              size="small"
-              type="number"
-              inputProps={{ step: 'any', min: -180, max: 180 }}
-              placeholder="예: 126.9770"
-              fullWidth
-            />
-          </Box>
+          >
+            <MenuItem value=""><em>없음</em></MenuItem>
+            {CATEGORIES.map((cat) => (
+              <MenuItem key={cat.value} value={cat.value}>{cat.emoji} {cat.value}</MenuItem>
+            ))}
+          </TextField>
+
+          {/* 메모 */}
           <TextField
-            label="순서"
-            name="orderIndex"
-            value={formData.orderIndex}
-            onChange={handleChange}
+            label="메모 (선택)"
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
             size="small"
-            type="number"
-            inputProps={{ min: 1 }}
-            sx={{ width: 100 }}
+            fullWidth
+            multiline
+            rows={2}
+            placeholder="예: 예약 필수, 웨이팅 있음, 주차 가능..."
           />
+
           <Button
             type="submit"
             variant="contained"
-            disabled={loading}
+            disabled={loading || !pin}
             startIcon={loading ? <CircularProgress size={16} /> : <AddLocationAltIcon />}
-            sx={{ alignSelf: 'flex-start', whiteSpace: 'nowrap' }}
+            sx={{ alignSelf: 'flex-start' }}
           >
             {loading ? '추가 중...' : '장소 추가'}
           </Button>

@@ -31,4 +31,10 @@ public class Location {
 
     @Column(nullable = false)
     private Integer orderIndex;
+
+    @Column
+    private String category;
+
+    @Column(columnDefinition = "TEXT")
+    private String memo;
 }

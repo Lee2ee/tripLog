@@ -4,11 +4,14 @@ import ProtectedRoute from './components/Auth/ProtectedRoute';
 import AdminRoute from './components/Auth/AdminRoute';
 import Navbar from './components/common/Navbar';
 import LoginPage from './pages/LoginPage';
-import SignupPage from './pages/SignupPage';
+import AdminLoginPage from './pages/AdminLoginPage';
+import OAuthCallbackPage from './pages/OAuthCallbackPage';
 import TripsPage from './pages/TripsPage';
 import TripDetailPage from './pages/TripDetailPage';
 import GalleryPage from './pages/GalleryPage';
 import AdminPage from './pages/AdminPage';
+import PublicTripsPage from './pages/PublicTripsPage';
+import PublicTripDetailPage from './pages/PublicTripDetailPage';
 import { Box } from '@mui/material';
 
 const App = () => {
@@ -19,7 +22,10 @@ const App = () => {
         <Routes>
           <Route path="/" element={<Navigate to="/trips" replace />} />
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/admin/login" element={<AdminLoginPage />} />
+          <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
+          <Route path="/explore" element={<PublicTripsPage />} />
+          <Route path="/explore/:id" element={<PublicTripDetailPage />} />
           <Route
             path="/trips"
             element={

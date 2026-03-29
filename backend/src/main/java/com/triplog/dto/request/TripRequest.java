@@ -19,4 +19,7 @@ public class TripRequest {
 
     @NotNull(message = "End date is required")
     private LocalDate endDate;
+
+    // null → false (기본 비공개)
+    private Boolean isPublic;
 }

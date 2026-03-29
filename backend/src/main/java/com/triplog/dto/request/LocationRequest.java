@@ -20,4 +20,8 @@ public class LocationRequest {
 
     @NotNull(message = "Order index is required")
     private Integer orderIndex;
+
+    private String category;
+
+    private String memo;
 }

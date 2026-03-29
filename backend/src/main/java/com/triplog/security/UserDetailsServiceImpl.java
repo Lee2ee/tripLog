@@ -22,9 +22,12 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
 
+        // Kakao users have no password; JWT auth doesn't use the password field
+        String password = user.getPassword() != null ? user.getPassword() : "{noop}KAKAO_OAUTH2";
+
         return org.springframework.security.core.userdetails.User.builder()
                 .username(user.getEmail())
-                .password(user.getPassword())
+                .password(password)
                 .roles(user.getRole().name())
                 .build();
     }

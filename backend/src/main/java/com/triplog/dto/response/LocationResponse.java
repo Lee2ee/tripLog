@@ -15,4 +15,6 @@ public class LocationResponse {
     private Double latitude;
     private Double longitude;
     private Integer orderIndex;
+    private String category;
+    private String memo;
 }
