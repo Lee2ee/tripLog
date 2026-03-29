@@ -1,5 +1,6 @@
 package com.triplog.controller;
 
+import com.triplog.dto.request.LocationReorderRequest;
 import com.triplog.dto.request.LocationRequest;
 import com.triplog.dto.response.ApiResponse;
 import com.triplog.dto.response.LocationResponse;
@@ -11,6 +12,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -36,6 +39,16 @@ public class LocationController {
             @AuthenticationPrincipal UserDetails userDetails) {
         LocationResponse location = locationService.updateLocation(id, request, userDetails.getUsername());
         return ResponseEntity.ok(ApiResponse.success("Location updated successfully", location));
+    }
+
+    @PatchMapping("/api/trips/{tripId}/days/{dayId}/locations/reorder")
+    public ResponseEntity<ApiResponse<List<LocationResponse>>> reorderLocations(
+            @PathVariable Long tripId,
+            @PathVariable Long dayId,
+            @RequestBody LocationReorderRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        List<LocationResponse> locations = locationService.reorderLocations(tripId, dayId, request, userDetails.getUsername());
+        return ResponseEntity.ok(ApiResponse.success("순서가 변경되었습니다.", locations));
     }
 
     @DeleteMapping("/api/locations/{id}")

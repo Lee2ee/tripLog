@@ -6,11 +6,19 @@ import {
   TextField, Button, Stack,
 } from '@mui/material';
 import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import axiosInstance from '../api/axios';
 import TripMap from '../components/Map/TripMap';
 import AddLocationForm from '../components/Trip/AddLocationForm';
 import { getUser } from '../store/authStore';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import PeopleIcon from '@mui/icons-material/People';
@@ -20,11 +28,114 @@ import PersonIcon from '@mui/icons-material/Person';
 import StarIcon from '@mui/icons-material/Star';
 import LockIcon from '@mui/icons-material/Lock';
 import PublicIcon from '@mui/icons-material/Public';
+import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
+import DirectionsWalkIcon from '@mui/icons-material/DirectionsWalk';
+import DirectionsTransitIcon from '@mui/icons-material/DirectionsTransit';
+import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike';
+
+const TRANSPORT_ICONS = {
+  DRIVING:   { icon: <DirectionsCarIcon sx={{ fontSize: 14 }} />,     color: '#1976d2', label: '자동차' },
+  WALKING:   { icon: <DirectionsWalkIcon sx={{ fontSize: 14 }} />,    color: '#388e3c', label: '도보' },
+  TRANSIT:   { icon: <DirectionsTransitIcon sx={{ fontSize: 14 }} />, color: '#f57c00', label: '대중교통' },
+  BICYCLING: { icon: <DirectionsBikeIcon sx={{ fontSize: 14 }} />,    color: '#7b1fa2', label: '자전거' },
+};
+
+/* ── 드래그 가능한 장소 아이템 ── */
+const SortableLocationItem = ({ loc, index, dayId, onDelete, deleteLoading, canEdit }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: loc.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    background: isDragging ? '#f5f5f5' : 'transparent',
+  };
+  const transport = loc.transportMode ? TRANSPORT_ICONS[loc.transportMode] : null;
+
+  return (
+    <>
+      {/* 이동 수단 커넥터 (첫 번째 장소 제외) */}
+      {index > 0 && (
+        <Box sx={{ display: 'flex', alignItems: 'center', pl: 5, py: 0.3, bgcolor: 'grey.50' }}>
+          <Box sx={{ width: 2, height: 12, bgcolor: transport?.color ?? 'grey.300', mr: 1, ml: 1.5 }} />
+          {transport ? (
+            <Chip
+              icon={transport.icon}
+              label={transport.label}
+              size="small"
+              sx={{
+                height: 20, fontSize: '0.68rem', fontWeight: 'bold',
+                color: transport.color, borderColor: transport.color,
+                '& .MuiChip-icon': { color: transport.color },
+              }}
+              variant="outlined"
+            />
+          ) : (
+            <Typography variant="caption" color="text.disabled">이동 수단 미지정</Typography>
+          )}
+        </Box>
+      )}
+
+      <ListItem ref={setNodeRef} style={style} sx={{ px: 2 }}>
+        {/* 드래그 핸들 */}
+        {canEdit && (
+          <Box
+            {...attributes}
+            {...listeners}
+            sx={{ cursor: 'grab', color: 'grey.400', mr: 0.5, display: 'flex', alignItems: 'center', '&:active': { cursor: 'grabbing' } }}
+          >
+            <DragIndicatorIcon fontSize="small" />
+          </Box>
+        )}
+
+        <Box sx={{ width: 26, height: 26, borderRadius: '50%', bgcolor: 'primary.main', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 'bold', mr: 1.5, flexShrink: 0 }}>
+          {index + 1}
+        </Box>
+        <ListItemText
+          primary={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+              <span>{loc.name}</span>
+              {loc.category && (
+                <Chip label={loc.category} size="small" variant="outlined" sx={{ height: 18, fontSize: '0.7rem' }} />
+              )}
+            </Box>
+          }
+          secondary={
+            <Box component="span">
+              <Box component="span" sx={{ display: 'block', fontSize: '0.75rem' }}>
+                {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}
+              </Box>
+              {loc.memo && (
+                <Box component="span" sx={{ display: 'block', fontSize: '0.75rem', color: 'text.secondary', fontStyle: 'italic', mt: 0.25 }}>
+                  {loc.memo}
+                </Box>
+              )}
+            </Box>
+          }
+          primaryTypographyProps={{ fontWeight: 'medium', sx: { wordBreak: 'keep-all' } }}
+          secondaryTypographyProps={{ component: 'span' }}
+        />
+        {canEdit && (
+          <ListItemSecondaryAction>
+            <Tooltip title="장소 삭제">
+              <IconButton edge="end" size="small" color="error"
+                onClick={() => onDelete(dayId, loc.id)}
+                disabled={deleteLoading === loc.id}>
+                {deleteLoading === loc.id ? <CircularProgress size={16} color="error" /> : <DeleteIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          </ListItemSecondaryAction>
+        )}
+      </ListItem>
+    </>
+  );
+};
 
 const TripDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const currentUser = getUser();
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const [trip, setTrip] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -66,6 +177,37 @@ const TripDetailPage = () => {
           : day
       ),
     }));
+  };
+
+  const handleReorder = async (dayId, activeId, overId, locations) => {
+    const oldIndex = locations.findIndex((l) => l.id === activeId);
+    const newIndex = locations.findIndex((l) => l.id === overId);
+    if (oldIndex === newIndex) return;
+
+    const reordered = arrayMove(locations, oldIndex, newIndex);
+
+    // 낙관적 업데이트
+    setTrip((prev) => ({
+      ...prev,
+      tripDays: prev.tripDays.map((day) =>
+        day.id === dayId ? { ...day, locations: reordered } : day
+      ),
+    }));
+
+    try {
+      await axiosInstance.patch(`/trips/${id}/days/${dayId}/locations/reorder`, {
+        orderedIds: reordered.map((l) => l.id),
+      });
+    } catch {
+      setError('순서 변경에 실패했습니다.');
+      // 실패 시 원래 순서 복구
+      setTrip((prev) => ({
+        ...prev,
+        tripDays: prev.tripDays.map((day) =>
+          day.id === dayId ? { ...day, locations } : day
+        ),
+      }));
+    }
   };
 
   const handleDeleteLocation = async (dayId, locationId) => {
@@ -258,51 +400,34 @@ const TripDetailPage = () => {
                   </Box>
                   <Divider />
                   {activeDay.locations && activeDay.locations.length > 0 ? (
-                    <List dense disablePadding>
-                      {activeDay.locations.map((loc, index) => (
-                        <React.Fragment key={loc.id}>
-                          <ListItem sx={{ px: 2 }}>
-                            <Box sx={{ width: 26, height: 26, borderRadius: '50%', bgcolor: 'primary.main', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 'bold', mr: 1.5, flexShrink: 0 }}>
-                              {index + 1}
-                            </Box>
-                            <ListItemText
-                              primary={
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                                  <span>{loc.name}</span>
-                                  {loc.category && (
-                                    <Chip label={loc.category} size="small" variant="outlined" sx={{ height: 18, fontSize: '0.7rem' }} />
-                                  )}
-                                </Box>
-                              }
-                              secondary={
-                                <Box component="span">
-                                  <Box component="span" sx={{ display: 'block', fontSize: '0.75rem' }}>
-                                    {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}
-                                  </Box>
-                                  {loc.memo && (
-                                    <Box component="span" sx={{ display: 'block', fontSize: '0.75rem', color: 'text.secondary', fontStyle: 'italic', mt: 0.25 }}>
-                                      {loc.memo}
-                                    </Box>
-                                  )}
-                                </Box>
-                              }
-                              primaryTypographyProps={{ fontWeight: 'medium', sx: { wordBreak: 'keep-all' } }}
-                              secondaryTypographyProps={{ component: 'span' }}
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={({ active, over }) => {
+                        if (over && active.id !== over.id) {
+                          handleReorder(activeDay.id, active.id, over.id, activeDay.locations);
+                        }
+                      }}
+                    >
+                      <SortableContext
+                        items={activeDay.locations.map((l) => l.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <List dense disablePadding>
+                          {activeDay.locations.map((loc, index) => (
+                            <SortableLocationItem
+                              key={loc.id}
+                              loc={loc}
+                              index={index}
+                              dayId={activeDay.id}
+                              onDelete={handleDeleteLocation}
+                              deleteLoading={deleteLoading}
+                              canEdit={isOwner || true}
                             />
-                            <ListItemSecondaryAction>
-                              <Tooltip title="장소 삭제">
-                                <IconButton edge="end" size="small" color="error"
-                                  onClick={() => handleDeleteLocation(activeDay.id, loc.id)}
-                                  disabled={deleteLoading === loc.id}>
-                                  {deleteLoading === loc.id ? <CircularProgress size={16} color="error" /> : <DeleteIcon fontSize="small" />}
-                                </IconButton>
-                              </Tooltip>
-                            </ListItemSecondaryAction>
-                          </ListItem>
-                          {index < activeDay.locations.length - 1 && <Divider />}
-                        </React.Fragment>
-                      ))}
-                    </List>
+                          ))}
+                        </List>
+                      </SortableContext>
+                    </DndContext>
                   ) : (
                     <Box sx={{ p: 3, textAlign: 'center' }}>
                       <LocationOnIcon sx={{ fontSize: 40, color: 'grey.400' }} />

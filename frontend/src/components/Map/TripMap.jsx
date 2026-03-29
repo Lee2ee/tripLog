@@ -82,10 +82,12 @@ const TripMap = ({ locations = [] }) => {
 
   // DirectionsRenderer·폴리라인 제거
   const clearRoute = useCallback(() => {
-    if (rendererRef.current) {
+    if (Array.isArray(rendererRef.current)) {
+      rendererRef.current.forEach((r) => r.setMap(null));
+    } else if (rendererRef.current) {
       rendererRef.current.setMap(null);
-      rendererRef.current = null;
     }
+    rendererRef.current = [];
     if (fallbackPolyRef.current) {
       fallbackPolyRef.current.setMap(null);
       fallbackPolyRef.current = null;
@@ -105,8 +107,8 @@ const TripMap = ({ locations = [] }) => {
     });
   }, []);
 
-  // Directions API 호출 → 실제 경로 그리기
-  const fetchRoute = useCallback((mapInstance, locs, mode) => {
+  // 세그먼트별 Directions API 호출 → 이동 수단별 실제 경로
+  const fetchRoute = useCallback((mapInstance, locs, globalMode) => {
     clearRoute();
     setRouteError(false);
 
@@ -115,44 +117,50 @@ const TripMap = ({ locations = [] }) => {
       return;
     }
 
-    const modeConfig = TRAVEL_MODES.find((m) => m.value === mode);
-    const color = modeConfig?.color ?? '#1976d2';
-
     const service = new window.google.maps.DirectionsService();
-    service.route(
-      {
-        origin: { lat: locs[0].latitude, lng: locs[0].longitude },
-        destination: { lat: locs[locs.length - 1].latitude, lng: locs[locs.length - 1].longitude },
-        waypoints: locs.slice(1, -1).map((loc) => ({
-          location: { lat: loc.latitude, lng: loc.longitude },
-          stopover: true,
-        })),
-        travelMode: window.google.maps.TravelMode[mode],
-        optimizeWaypoints: false,
-      },
-      (result, status) => {
-        if (status === 'OK') {
-          rendererRef.current = new window.google.maps.DirectionsRenderer({
-            map: mapInstance,
-            directions: result,
-            suppressMarkers: true,
-            polylineOptions: {
-              strokeColor: color,
-              strokeOpacity: 0.85,
-              strokeWeight: 5,
-            },
-          });
-          // 실제 이동 거리 합산 (m → km)
-          const totalM = result.routes[0].legs.reduce((sum, leg) => sum + leg.distance.value, 0);
-          setRouteDistance((totalM / 1000).toFixed(1));
-        } else {
-          // 경로를 찾을 수 없을 때 직선으로 fallback
-          setRouteError(true);
-          setRouteDistance(null);
-          drawFallbackPolyline(mapInstance, locs, color);
+    let totalMeters = 0;
+    let pendingCount = locs.length - 1;
+    let hasError = false;
+
+    locs.slice(1).forEach((dest, i) => {
+      const origin = locs[i];
+      // 장소에 저장된 이동 수단 우선, 없으면 글로벌 선택 값 사용
+      const segMode = dest.transportMode || globalMode;
+      const modeConfig = TRAVEL_MODES.find((m) => m.value === segMode);
+      const color = modeConfig?.color ?? '#1976d2';
+
+      service.route(
+        {
+          origin: { lat: origin.latitude, lng: origin.longitude },
+          destination: { lat: dest.latitude, lng: dest.longitude },
+          travelMode: window.google.maps.TravelMode[segMode],
+        },
+        (result, status) => {
+          pendingCount -= 1;
+          if (status === 'OK') {
+            const renderer = new window.google.maps.DirectionsRenderer({
+              map: mapInstance,
+              directions: result,
+              suppressMarkers: true,
+              polylineOptions: { strokeColor: color, strokeOpacity: 0.85, strokeWeight: 5 },
+            });
+            rendererRef.current = renderer; // 마지막 renderer 참조 유지 (cleanup용)
+            // 여러 renderer를 배열로 관리
+            if (!Array.isArray(rendererRef.current)) rendererRef.current = [];
+            if (Array.isArray(rendererRef.current)) rendererRef.current.push(renderer);
+            totalMeters += result.routes[0].legs[0].distance.value;
+          } else {
+            hasError = true;
+            drawFallbackPolyline(mapInstance, [origin, dest], color);
+          }
+
+          if (pendingCount === 0) {
+            setRouteError(hasError);
+            setRouteDistance(totalMeters > 0 ? (totalMeters / 1000).toFixed(1) : null);
+          }
         }
-      }
-    );
+      );
+    });
   }, [clearRoute, drawFallbackPolyline]);
 
   const onMapLoad = useCallback((mapInstance) => {
@@ -183,11 +191,9 @@ const TripMap = ({ locations = [] }) => {
     fetchRoute(mapRef.current, locationsRef.current, travelMode);
   }, [travelMode, fetchRoute]);
 
-  // 직선 거리 (fallback 표시용)
   const straightDistance = calculateTotalDistance(locations);
-  const displayDistance = routeDistance ?? (locations.length >= 2 ? straightDistance : null);
   const distanceLabel = routeDistance
-    ? `${routeDistance} km`
+    ? `총 ${routeDistance} km`
     : locations.length >= 2
     ? `${straightDistance} km (직선)`
     : null;
@@ -260,13 +266,11 @@ const TripMap = ({ locations = [] }) => {
             sx={{
               display: 'inline-flex', alignItems: 'center', gap: 0.5,
               px: 2, py: 0.75,
-              bgcolor: activeMode?.color ?? 'primary.main',
-              color: 'white',
+              bgcolor: 'primary.main', color: 'white',
               borderRadius: 2, fontSize: '0.875rem', fontWeight: 'bold',
             }}
           >
-            {activeMode?.icon}
-            {activeMode?.label} {distanceLabel}
+            {distanceLabel}
           </Box>
         )}
 

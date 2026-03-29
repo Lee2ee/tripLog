@@ -37,4 +37,7 @@ public class Location {
 
     @Column(columnDefinition = "TEXT")
     private String memo;
+
+    @Column(name = "transport_mode")
+    private String transportMode; // DRIVING, WALKING, TRANSIT, BICYCLING (이전 장소에서 이 장소까지의 이동 수단)
 }

@@ -24,4 +24,6 @@ public class LocationRequest {
     private String category;
 
     private String memo;
+
+    private String transportMode;
 }

@@ -17,4 +17,5 @@ public class LocationResponse {
     private Integer orderIndex;
     private String category;
     private String memo;
+    private String transportMode;
 }

@@ -1,14 +1,25 @@
 import React, { useState, useRef, useCallback } from 'react';
 import {
   Box, TextField, Button, Paper, Typography, CircularProgress,
-  Alert, Divider, MenuItem, Chip,
+  Alert, Divider, MenuItem, Chip, ToggleButtonGroup, ToggleButton, Tooltip,
 } from '@mui/material';
 import { Autocomplete, useJsApiLoader } from '@react-google-maps/api';
 import AddLocationAltIcon from '@mui/icons-material/AddLocationAlt';
 import SearchIcon from '@mui/icons-material/Search';
+import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
+import DirectionsWalkIcon from '@mui/icons-material/DirectionsWalk';
+import DirectionsTransitIcon from '@mui/icons-material/DirectionsTransit';
+import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 const LIBRARIES = ['places'];
+
+const TRANSPORT_MODES = [
+  { value: 'DRIVING',   label: '자동차',   icon: <DirectionsCarIcon fontSize="small" />,     color: '#1976d2' },
+  { value: 'WALKING',   label: '도보',     icon: <DirectionsWalkIcon fontSize="small" />,    color: '#388e3c' },
+  { value: 'TRANSIT',   label: '대중교통', icon: <DirectionsTransitIcon fontSize="small" />, color: '#f57c00' },
+  { value: 'BICYCLING', label: '자전거',   icon: <DirectionsBikeIcon fontSize="small" />,    color: '#7b1fa2' },
+];
 
 const CATEGORIES = [
   { value: '관광지', emoji: '🏛️' },
@@ -25,6 +36,7 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [memo, setMemo] = useState('');
+  const [transportMode, setTransportMode] = useState('DRIVING');
   const [pin, setPin] = useState(null); // { lat, lng }
   const [nameError, setNameError] = useState('');
   const [pinError, setPinError] = useState('');
@@ -70,6 +82,7 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
         orderIndex: existingCount + 1,
         category: category || null,
         memo: memo.trim() || null,
+        transportMode: existingCount > 0 ? transportMode : null,
       });
       setSuccessMsg(`"${name}" 장소가 추가되었습니다!`);
       setName('');
@@ -141,6 +154,36 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
               variant="outlined"
               sx={{ alignSelf: 'flex-start', fontFamily: 'monospace' }}
             />
+          )}
+
+          {/* 이동 수단 (두 번째 장소부터) */}
+          {existingCount > 0 && (
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                이전 장소에서 이동 수단
+              </Typography>
+              <ToggleButtonGroup
+                value={transportMode}
+                exclusive
+                onChange={(_, v) => { if (v) setTransportMode(v); }}
+                size="small"
+              >
+                {TRANSPORT_MODES.map((mode) => (
+                  <Tooltip key={mode.value} title={mode.label} arrow>
+                    <ToggleButton
+                      value={mode.value}
+                      sx={{
+                        px: 1.5, gap: 0.5,
+                        '&.Mui-selected': { color: mode.color, borderColor: mode.color },
+                      }}
+                    >
+                      {mode.icon}
+                      <Typography variant="caption">{mode.label}</Typography>
+                    </ToggleButton>
+                  </Tooltip>
+                ))}
+              </ToggleButtonGroup>
+            </Box>
           )}
 
           {/* 카테고리 */}
