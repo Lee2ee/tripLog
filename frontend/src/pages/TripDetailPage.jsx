@@ -644,10 +644,10 @@ const TripDetailPage = () => {
         loc={editingLoc}
         isFirst={
           editingLoc
-            ? (trip?.tripDays
-                ?.flatMap((d) => d.locations)
-                ?.find((l) => l.id === editingLoc.id)
-                ?.orderIndex ?? 1) === 1
+            ? trip?.tripDays
+                ?.find((d) => d.locations.some((l) => l.id === editingLoc.id))
+                ?.locations
+                ?.findIndex((l) => l.id === editingLoc.id) === 0
             : false
         }
         onClose={() => setEditingLoc(null)}
