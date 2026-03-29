@@ -1,6 +1,13 @@
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { GoogleMap, useJsApiLoader, InfoWindow } from '@react-google-maps/api';
-import { Box, Typography, CircularProgress, Alert } from '@mui/material';
+import {
+  Box, Typography, CircularProgress, Alert,
+  ToggleButton, ToggleButtonGroup, Tooltip,
+} from '@mui/material';
+import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
+import DirectionsWalkIcon from '@mui/icons-material/DirectionsWalk';
+import DirectionsTransitIcon from '@mui/icons-material/DirectionsTransit';
+import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike';
 import { calculateTotalDistance } from './haversine';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
@@ -13,6 +20,13 @@ const MAP_OPTIONS = {
   fullscreenControl: true,
   zoomControl: true,
 };
+
+const TRAVEL_MODES = [
+  { value: 'DRIVING',   label: '자동차',   icon: <DirectionsCarIcon fontSize="small" />,     color: '#1976d2' },
+  { value: 'WALKING',   label: '도보',     icon: <DirectionsWalkIcon fontSize="small" />,    color: '#388e3c' },
+  { value: 'TRANSIT',   label: '대중교통', icon: <DirectionsTransitIcon fontSize="small" />, color: '#f57c00' },
+  { value: 'BICYCLING', label: '자전거',   icon: <DirectionsBikeIcon fontSize="small" />,    color: '#7b1fa2' },
+];
 
 const applyBounds = (mapInstance, locs) => {
   if (!mapInstance || !window.google) return;
@@ -29,49 +43,34 @@ const applyBounds = (mapInstance, locs) => {
   }
 };
 
-// Marker/Polyline을 직접(imperative) 생성·갱신
-const syncOverlays = (mapInstance, locs, markersRef, polylineRef, onMarkerClick) => {
-  if (!mapInstance || !window.google) return;
-
-  // 기존 마커 제거
+const syncMarkers = (mapInstance, locs, markersRef, onMarkerClick) => {
   markersRef.current.forEach((m) => m.setMap(null));
-  markersRef.current = [];
-
-  // 새 마커 생성
   markersRef.current = locs.map((loc, index) => {
     const marker = new window.google.maps.Marker({
       map: mapInstance,
       position: { lat: loc.latitude, lng: loc.longitude },
       label: { text: String(index + 1), color: 'white', fontWeight: 'bold', fontSize: '13px' },
+      zIndex: 10,
     });
     marker.addListener('click', () => onMarkerClick(loc));
     return marker;
   });
-
-  // 폴리라인 갱신
-  if (polylineRef.current) {
-    polylineRef.current.setMap(null);
-    polylineRef.current = null;
-  }
-  if (locs.length >= 2) {
-    polylineRef.current = new window.google.maps.Polyline({
-      map: mapInstance,
-      path: locs.map((loc) => ({ lat: loc.latitude, lng: loc.longitude })),
-      strokeColor: '#1976d2',
-      strokeOpacity: 0.85,
-      strokeWeight: 4,
-      geodesic: true,
-    });
-  }
 };
 
 const TripMap = ({ locations = [] }) => {
   const [selectedMarker, setSelectedMarker] = useState(null);
+  const [travelMode, setTravelMode] = useState('DRIVING');
+  const [routeDistance, setRouteDistance] = useState(null); // Directions API 실제 거리
+  const [routeError, setRouteError] = useState(false);      // 경로 조회 실패 여부
+
   const mapRef = useRef(null);
   const markersRef = useRef([]);
-  const polylineRef = useRef(null);
+  const rendererRef = useRef(null);   // DirectionsRenderer
+  const fallbackPolyRef = useRef(null); // 직선 폴리라인 (fallback)
   const locationsRef = useRef(locations);
+  const travelModeRef = useRef(travelMode);
   locationsRef.current = locations;
+  travelModeRef.current = travelMode;
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -81,30 +80,117 @@ const TripMap = ({ locations = [] }) => {
     region: 'KR',
   });
 
+  // DirectionsRenderer·폴리라인 제거
+  const clearRoute = useCallback(() => {
+    if (rendererRef.current) {
+      rendererRef.current.setMap(null);
+      rendererRef.current = null;
+    }
+    if (fallbackPolyRef.current) {
+      fallbackPolyRef.current.setMap(null);
+      fallbackPolyRef.current = null;
+    }
+  }, []);
+
+  // 직선 폴리라인 (Directions API 실패 시 fallback)
+  const drawFallbackPolyline = useCallback((mapInstance, locs, color) => {
+    if (locs.length < 2) return;
+    fallbackPolyRef.current = new window.google.maps.Polyline({
+      map: mapInstance,
+      path: locs.map((l) => ({ lat: l.latitude, lng: l.longitude })),
+      strokeColor: color,
+      strokeOpacity: 0.6,
+      strokeWeight: 3,
+      geodesic: true,
+    });
+  }, []);
+
+  // Directions API 호출 → 실제 경로 그리기
+  const fetchRoute = useCallback((mapInstance, locs, mode) => {
+    clearRoute();
+    setRouteError(false);
+
+    if (!mapInstance || !window.google || locs.length < 2) {
+      setRouteDistance(null);
+      return;
+    }
+
+    const modeConfig = TRAVEL_MODES.find((m) => m.value === mode);
+    const color = modeConfig?.color ?? '#1976d2';
+
+    const service = new window.google.maps.DirectionsService();
+    service.route(
+      {
+        origin: { lat: locs[0].latitude, lng: locs[0].longitude },
+        destination: { lat: locs[locs.length - 1].latitude, lng: locs[locs.length - 1].longitude },
+        waypoints: locs.slice(1, -1).map((loc) => ({
+          location: { lat: loc.latitude, lng: loc.longitude },
+          stopover: true,
+        })),
+        travelMode: window.google.maps.TravelMode[mode],
+        optimizeWaypoints: false,
+      },
+      (result, status) => {
+        if (status === 'OK') {
+          rendererRef.current = new window.google.maps.DirectionsRenderer({
+            map: mapInstance,
+            directions: result,
+            suppressMarkers: true,
+            polylineOptions: {
+              strokeColor: color,
+              strokeOpacity: 0.85,
+              strokeWeight: 5,
+            },
+          });
+          // 실제 이동 거리 합산 (m → km)
+          const totalM = result.routes[0].legs.reduce((sum, leg) => sum + leg.distance.value, 0);
+          setRouteDistance((totalM / 1000).toFixed(1));
+        } else {
+          // 경로를 찾을 수 없을 때 직선으로 fallback
+          setRouteError(true);
+          setRouteDistance(null);
+          drawFallbackPolyline(mapInstance, locs, color);
+        }
+      }
+    );
+  }, [clearRoute, drawFallbackPolyline]);
+
   const onMapLoad = useCallback((mapInstance) => {
     mapRef.current = mapInstance;
-    syncOverlays(mapInstance, locationsRef.current, markersRef, polylineRef, setSelectedMarker);
+    syncMarkers(mapInstance, locationsRef.current, markersRef, setSelectedMarker);
+    fetchRoute(mapInstance, locationsRef.current, travelModeRef.current);
     applyBounds(mapInstance, locationsRef.current);
-  }, []);
+  }, [fetchRoute]);
 
   const onMapUnmount = useCallback(() => {
+    clearRoute();
     markersRef.current.forEach((m) => m.setMap(null));
     markersRef.current = [];
-    if (polylineRef.current) {
-      polylineRef.current.setMap(null);
-      polylineRef.current = null;
-    }
     mapRef.current = null;
-  }, []);
+  }, [clearRoute]);
 
-  // locations 변경 시 오버레이 재생성
+  // locations 변경 (장소 추가/삭제)
   useEffect(() => {
     if (!mapRef.current) return;
-    syncOverlays(mapRef.current, locations, markersRef, polylineRef, setSelectedMarker);
+    syncMarkers(mapRef.current, locations, markersRef, setSelectedMarker);
+    fetchRoute(mapRef.current, locations, travelModeRef.current);
     applyBounds(mapRef.current, locations);
-  }, [locations]);
+  }, [locations, fetchRoute]);
 
-  const totalDistance = calculateTotalDistance(locations);
+  // 이동 수단 변경
+  useEffect(() => {
+    if (!mapRef.current) return;
+    fetchRoute(mapRef.current, locationsRef.current, travelMode);
+  }, [travelMode, fetchRoute]);
+
+  // 직선 거리 (fallback 표시용)
+  const straightDistance = calculateTotalDistance(locations);
+  const displayDistance = routeDistance ?? (locations.length >= 2 ? straightDistance : null);
+  const distanceLabel = routeDistance
+    ? `${routeDistance} km`
+    : locations.length >= 2
+    ? `${straightDistance} km (직선)`
+    : null;
 
   if (loadError) {
     return (
@@ -137,29 +223,59 @@ const TripMap = ({ locations = [] }) => {
         <Typography variant="body2" color="text.secondary" textAlign="center" mt={1}>
           .env 파일에 VITE_GOOGLE_MAPS_API_KEY를 설정해주세요.
         </Typography>
-        {locations.length > 0 && (
-          <Typography variant="body2" color="primary" mt={2}>
-            장소 {locations.length}개 &mdash; 총 거리: {totalDistance} km
-          </Typography>
-        )}
       </Box>
     );
   }
 
+  const activeMode = TRAVEL_MODES.find((m) => m.value === travelMode);
+
   return (
     <Box>
-      {locations.length >= 2 && (
-        <Box
-          sx={{
-            display: 'inline-flex', alignItems: 'center',
-            px: 2, py: 0.75, mb: 1.5,
-            bgcolor: 'primary.light', color: 'primary.contrastText',
-            borderRadius: 2, fontSize: '0.875rem', fontWeight: 'bold',
-          }}
+      {/* 이동 수단 선택 + 거리 표시 */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.5, flexWrap: 'wrap' }}>
+        <ToggleButtonGroup
+          value={travelMode}
+          exclusive
+          onChange={(_, v) => { if (v) setTravelMode(v); }}
+          size="small"
+          sx={{ bgcolor: 'background.paper' }}
         >
-          총 이동 거리: {totalDistance} km
-        </Box>
-      )}
+          {TRAVEL_MODES.map((mode) => (
+            <Tooltip key={mode.value} title={mode.label} arrow>
+              <ToggleButton
+                value={mode.value}
+                sx={{
+                  px: 1.5,
+                  '&.Mui-selected': { color: mode.color, borderColor: mode.color },
+                }}
+              >
+                {mode.icon}
+              </ToggleButton>
+            </Tooltip>
+          ))}
+        </ToggleButtonGroup>
+
+        {distanceLabel && (
+          <Box
+            sx={{
+              display: 'inline-flex', alignItems: 'center', gap: 0.5,
+              px: 2, py: 0.75,
+              bgcolor: activeMode?.color ?? 'primary.main',
+              color: 'white',
+              borderRadius: 2, fontSize: '0.875rem', fontWeight: 'bold',
+            }}
+          >
+            {activeMode?.icon}
+            {activeMode?.label} {distanceLabel}
+          </Box>
+        )}
+
+        {routeError && (
+          <Typography variant="caption" color="text.secondary">
+            경로를 찾을 수 없어 직선으로 표시합니다
+          </Typography>
+        )}
+      </Box>
 
       <GoogleMap
         mapContainerStyle={containerStyle}
