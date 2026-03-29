@@ -4,6 +4,8 @@ import {
   List, ListItem, ListItemText, ListItemSecondaryAction, ListItemAvatar,
   Avatar, IconButton, Chip, Paper, Divider, Breadcrumbs, Link, Tooltip,
   TextField, Button, Stack,
+  Dialog, DialogTitle, DialogContent, DialogActions,
+  ToggleButton, ToggleButtonGroup, MenuItem,
 } from '@mui/material';
 import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
@@ -18,6 +20,7 @@ import TripMap from '../components/Map/TripMap';
 import AddLocationForm from '../components/Trip/AddLocationForm';
 import { getUser } from '../store/authStore';
 import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
@@ -40,8 +43,150 @@ const TRANSPORT_ICONS = {
   BICYCLING: { icon: <DirectionsBikeIcon sx={{ fontSize: 14 }} />,    color: '#7b1fa2', label: '자전거' },
 };
 
+const TRANSPORT_MODES = [
+  { value: 'DRIVING',   label: '자동차',   icon: <DirectionsCarIcon fontSize="small" />,     color: '#1976d2' },
+  { value: 'WALKING',   label: '도보',     icon: <DirectionsWalkIcon fontSize="small" />,    color: '#388e3c' },
+  { value: 'TRANSIT',   label: '대중교통', icon: <DirectionsTransitIcon fontSize="small" />, color: '#f57c00' },
+  { value: 'BICYCLING', label: '자전거',   icon: <DirectionsBikeIcon fontSize="small" />,    color: '#7b1fa2' },
+];
+
+const CATEGORIES = [
+  { value: '관광지', emoji: '🏛️' },
+  { value: '맛집',  emoji: '🍽️' },
+  { value: '쇼핑',  emoji: '🛍️' },
+  { value: '숙박',  emoji: '🏨' },
+  { value: '교통',  emoji: '🚉' },
+  { value: '기타',  emoji: '📍' },
+];
+
+/* ── 장소 수정 다이얼로그 ── */
+const EditLocationDialog = ({ open, loc, isFirst, onClose, onSave }) => {
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('');
+  const [memo, setMemo] = useState('');
+  const [transportMode, setTransportMode] = useState('DRIVING');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (loc) {
+      setName(loc.name || '');
+      setCategory(loc.category || '');
+      setMemo(loc.memo || '');
+      setTransportMode(loc.transportMode || 'DRIVING');
+      setError('');
+    }
+  }, [loc, open]);
+
+  const handleSave = async () => {
+    if (!name.trim()) { setError('장소 이름을 입력해주세요.'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      await onSave(loc.id, {
+        name: name.trim(),
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        orderIndex: loc.orderIndex,
+        category: category || null,
+        memo: memo.trim() || null,
+        transportMode: isFirst ? null : transportMode,
+      });
+      onClose();
+    } catch (err) {
+      setError(err.response?.data?.message || '수정에 실패했습니다.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!loc) return null;
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle sx={{ pb: 1 }}>장소 수정</DialogTitle>
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '12px !important' }}>
+        {error && <Alert severity="error" sx={{ py: 0 }}>{error}</Alert>}
+
+        <TextField
+          label="장소 이름"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          size="small"
+          fullWidth
+          autoFocus
+        />
+
+        <Box sx={{ fontSize: '0.75rem', color: 'text.secondary', fontFamily: 'monospace' }}>
+          📍 {loc.latitude?.toFixed(6)}, {loc.longitude?.toFixed(6)}
+        </Box>
+
+        {!isFirst && (
+          <Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+              이전 장소에서 이동 수단
+            </Typography>
+            <ToggleButtonGroup
+              value={transportMode}
+              exclusive
+              onChange={(_, v) => { if (v) setTransportMode(v); }}
+              size="small"
+            >
+              {TRANSPORT_MODES.map((mode) => (
+                <Tooltip key={mode.value} title={mode.label} arrow>
+                  <ToggleButton
+                    value={mode.value}
+                    sx={{
+                      px: 1.5, gap: 0.5,
+                      '&.Mui-selected': { color: mode.color, borderColor: mode.color },
+                    }}
+                  >
+                    {mode.icon}
+                    <Typography variant="caption">{mode.label}</Typography>
+                  </ToggleButton>
+                </Tooltip>
+              ))}
+            </ToggleButtonGroup>
+          </Box>
+        )}
+
+        <TextField
+          select
+          label="카테고리 (선택)"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          size="small"
+          fullWidth
+        >
+          <MenuItem value=""><em>없음</em></MenuItem>
+          {CATEGORIES.map((cat) => (
+            <MenuItem key={cat.value} value={cat.value}>{cat.emoji} {cat.value}</MenuItem>
+          ))}
+        </TextField>
+
+        <TextField
+          label="메모 (선택)"
+          value={memo}
+          onChange={(e) => setMemo(e.target.value)}
+          size="small"
+          fullWidth
+          multiline
+          rows={2}
+          placeholder="예: 예약 필수, 주차 가능..."
+        />
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+        <Button onClick={onClose} disabled={saving}>취소</Button>
+        <Button variant="contained" onClick={handleSave} disabled={saving}>
+          {saving ? <CircularProgress size={18} /> : '저장'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 /* ── 드래그 가능한 장소 아이템 ── */
-const SortableLocationItem = ({ loc, index, dayId, onDelete, deleteLoading, canEdit }) => {
+const SortableLocationItem = ({ loc, index, dayId, onDelete, onEdit, deleteLoading, canEdit }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: loc.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -115,9 +260,14 @@ const SortableLocationItem = ({ loc, index, dayId, onDelete, deleteLoading, canE
           secondaryTypographyProps={{ component: 'span' }}
         />
         {canEdit && (
-          <ListItemSecondaryAction>
+          <ListItemSecondaryAction sx={{ display: 'flex', gap: 0.5 }}>
+            <Tooltip title="장소 수정">
+              <IconButton size="small" color="primary" onClick={() => onEdit(loc)}>
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
             <Tooltip title="장소 삭제">
-              <IconButton edge="end" size="small" color="error"
+              <IconButton size="small" color="error"
                 onClick={() => onDelete(dayId, loc.id)}
                 disabled={deleteLoading === loc.id}>
                 {deleteLoading === loc.id ? <CircularProgress size={16} color="error" /> : <DeleteIcon fontSize="small" />}
@@ -143,6 +293,7 @@ const TripDetailPage = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [deleteLoading, setDeleteLoading] = useState(null);
   const [visibilityLoading, setVisibilityLoading] = useState(false);
+  const [editingLoc, setEditingLoc] = useState(null); // 수정 중인 장소
 
   // 멤버 관리
   const [searchQuery, setSearchQuery] = useState('');
@@ -208,6 +359,18 @@ const TripDetailPage = () => {
         ),
       }));
     }
+  };
+
+  const handleUpdateLocation = async (locationId, payload) => {
+    const response = await axiosInstance.put(`/locations/${locationId}`, payload);
+    const updated = response.data.data;
+    setTrip((prev) => ({
+      ...prev,
+      tripDays: prev.tripDays.map((day) => ({
+        ...day,
+        locations: day.locations.map((loc) => loc.id === locationId ? updated : loc),
+      })),
+    }));
   };
 
   const handleDeleteLocation = async (dayId, locationId) => {
@@ -421,6 +584,7 @@ const TripDetailPage = () => {
                               index={index}
                               dayId={activeDay.id}
                               onDelete={handleDeleteLocation}
+                              onEdit={setEditingLoc}
                               deleteLoading={deleteLoading}
                               canEdit={isOwner || true}
                             />
@@ -473,6 +637,22 @@ const TripDetailPage = () => {
       ) : (
         <Alert severity="info">이 여행에 등록된 날짜가 없습니다.</Alert>
       )}
+
+      {/* 장소 수정 다이얼로그 */}
+      <EditLocationDialog
+        open={!!editingLoc}
+        loc={editingLoc}
+        isFirst={
+          editingLoc
+            ? (trip?.tripDays
+                ?.flatMap((d) => d.locations)
+                ?.find((l) => l.id === editingLoc.id)
+                ?.orderIndex ?? 1) === 1
+            : false
+        }
+        onClose={() => setEditingLoc(null)}
+        onSave={handleUpdateLocation}
+      />
     </Container>
   );
 };
