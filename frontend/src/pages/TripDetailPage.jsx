@@ -5,7 +5,7 @@ import {
   Avatar, IconButton, Chip, Paper, Divider, Breadcrumbs, Link, Tooltip,
   TextField, Button, Stack, Badge,
   Dialog, DialogTitle, DialogContent, DialogActions,
-  ToggleButton, ToggleButtonGroup, MenuItem,
+  ToggleButton, ToggleButtonGroup, MenuItem, Snackbar,
 } from '@mui/material';
 import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
@@ -37,6 +37,9 @@ import DirectionsTransitIcon from '@mui/icons-material/DirectionsTransit';
 import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import ShareIcon from '@mui/icons-material/Share';
+import LocalOfferIcon from '@mui/icons-material/LocalOffer';
+import { TRIP_TAGS } from '../components/Trip/CreateTripDialog';
 
 const TRANSPORT_ICONS = {
   DRIVING:   { icon: <DirectionsCarIcon sx={{ fontSize: 14 }} />,     color: '#1976d2', label: '자동차' },
@@ -437,6 +440,10 @@ const TripDetailPage = () => {
   const [editingLoc, setEditingLoc] = useState(null);
   const [selectedLocId, setSelectedLocId] = useState(null); // 갤러리에 표시할 장소
   const [memberDialogOpen, setMemberDialogOpen] = useState(false);
+  const [snackbar, setSnackbar] = useState('');
+  const [tagDialogOpen, setTagDialogOpen] = useState(false);
+  const [editingTags, setEditingTags] = useState([]);
+  const [tagSaving, setTagSaving] = useState(false);
 
   // 멤버 관리
   const [searchQuery, setSearchQuery] = useState('');
@@ -646,6 +653,36 @@ const TripDetailPage = () => {
     }
   };
 
+  const handleShare = () => {
+    const url = `${window.location.origin}/explore/${id}`;
+    navigator.clipboard.writeText(url).then(() => setSnackbar('링크가 복사되었습니다.'));
+  };
+
+  const openTagDialog = () => {
+    setEditingTags([...(trip.tags || [])]);
+    setTagDialogOpen(true);
+  };
+
+  const toggleEditTag = (tag) => {
+    setEditingTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  };
+
+  const handleSaveTags = async () => {
+    setTagSaving(true);
+    try {
+      const res = await axiosInstance.patch(`/trips/${id}/tags`, { tags: editingTags });
+      setTrip((prev) => ({ ...prev, tags: res.data.data.tags }));
+      setTagDialogOpen(false);
+      setSnackbar('태그가 저장되었습니다.');
+    } catch {
+      setSnackbar('태그 저장에 실패했습니다.');
+    } finally {
+      setTagSaving(false);
+    }
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
     return new Date(dateStr).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
@@ -687,6 +724,18 @@ const TripDetailPage = () => {
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          {trip.isPublic && (
+            <Tooltip title="공유 링크 복사">
+              <Button variant="outlined" size="small" startIcon={<ShareIcon />} onClick={handleShare}>
+                공유
+              </Button>
+            </Tooltip>
+          )}
+          {isOwner && (
+            <Button variant="outlined" size="small" startIcon={<LocalOfferIcon />} onClick={openTagDialog}>
+              태그
+            </Button>
+          )}
           <Button
             variant="outlined"
             size="small"
@@ -717,6 +766,15 @@ const TripDetailPage = () => {
           )}
         </Box>
       </Box>
+
+      {/* 태그 표시 */}
+      {trip.tags && trip.tags.length > 0 && (
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8, mb: 2 }}>
+          {[...trip.tags].map((tag) => (
+            <Chip key={tag} label={tag} size="small" color="primary" variant="outlined" />
+          ))}
+        </Box>
+      )}
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
 
@@ -867,6 +925,45 @@ const TripDetailPage = () => {
         }
         onClose={() => setEditingLoc(null)}
         onSave={handleUpdateLocation}
+      />
+
+      {/* 태그 수정 다이얼로그 */}
+      <Dialog open={tagDialogOpen} onClose={() => setTagDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <LocalOfferIcon fontSize="small" /> 태그 수정
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" mb={2}>
+            여행의 성격에 맞는 태그를 선택하세요
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8 }}>
+            {TRIP_TAGS.map((tag) => (
+              <Chip
+                key={tag}
+                label={tag}
+                size="small"
+                clickable
+                onClick={() => toggleEditTag(tag)}
+                color={editingTags.includes(tag) ? 'primary' : 'default'}
+                variant={editingTags.includes(tag) ? 'filled' : 'outlined'}
+              />
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setTagDialogOpen(false)} disabled={tagSaving}>취소</Button>
+          <Button variant="contained" onClick={handleSaveTags} disabled={tagSaving}>
+            {tagSaving ? <CircularProgress size={20} color="inherit" /> : '저장'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={!!snackbar}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar('')}
+        message={snackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       />
     </Container>
   );

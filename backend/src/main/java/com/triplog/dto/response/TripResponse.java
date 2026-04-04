@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Getter
@@ -20,6 +21,8 @@ public class TripResponse {
     private LocalDate startDate;
     private LocalDate endDate;
     private LocalDateTime createdAt;
+    private String coverImageUrl;
+    private Set<String> tags;
     private List<TripDayResponse> tripDays;
     private List<ImageResponse> images;
     // populated in admin context only

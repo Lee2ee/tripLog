@@ -2,10 +2,15 @@ import React, { useState } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Button, Box, Alert, CircularProgress,
-  FormControlLabel, Switch, Typography, Divider,
+  FormControlLabel, Switch, Typography, Divider, Chip,
 } from '@mui/material';
 import LockIcon from '@mui/icons-material/Lock';
 import PublicIcon from '@mui/icons-material/Public';
+
+export const TRIP_TAGS = [
+  '국내여행', '해외여행', '혼자', '커플', '가족', '친구',
+  '봄', '여름', '가을', '겨울', '맛집투어', '자연/힐링', '역사/문화', '쇼핑',
+];
 
 const CreateTripDialog = ({ open, onClose, onSubmit, loading }) => {
   const [formData, setFormData] = useState({
@@ -13,6 +18,7 @@ const CreateTripDialog = ({ open, onClose, onSubmit, loading }) => {
     startDate: '',
     endDate: '',
     isPublic: false,
+    tags: [],
   });
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState('');
@@ -34,13 +40,22 @@ const CreateTripDialog = ({ open, onClose, onSubmit, loading }) => {
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }));
   };
 
+  const toggleTag = (tag) => {
+    setFormData((prev) => ({
+      ...prev,
+      tags: prev.tags.includes(tag)
+        ? prev.tags.filter((t) => t !== tag)
+        : [...prev.tags, tag],
+    }));
+  };
+
   const handleSubmit = async () => {
     const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) { setErrors(validationErrors); return; }
     setSubmitError('');
     try {
-      await onSubmit(formData);
-      setFormData({ title: '', startDate: '', endDate: '', isPublic: false });
+      await onSubmit({ ...formData, tags: formData.tags });
+      setFormData({ title: '', startDate: '', endDate: '', isPublic: false, tags: [] });
       setErrors({});
     } catch (error) {
       setSubmitError(error.response?.data?.message || '여행 생성에 실패했습니다');
@@ -48,7 +63,7 @@ const CreateTripDialog = ({ open, onClose, onSubmit, loading }) => {
   };
 
   const handleClose = () => {
-    setFormData({ title: '', startDate: '', endDate: '', isPublic: false });
+    setFormData({ title: '', startDate: '', endDate: '', isPublic: false, tags: [] });
     setErrors({});
     setSubmitError('');
     onClose();
@@ -76,7 +91,32 @@ const CreateTripDialog = ({ open, onClose, onSubmit, loading }) => {
             fullWidth required InputLabelProps={{ shrink: true }}
             inputProps={{ min: formData.startDate }}
           />
+
           <Divider />
+
+          {/* 태그 선택 */}
+          <Box>
+            <Typography variant="body2" fontWeight="medium" mb={1}>
+              태그 <Typography component="span" variant="caption" color="text.secondary">(선택사항)</Typography>
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8 }}>
+              {TRIP_TAGS.map((tag) => (
+                <Chip
+                  key={tag}
+                  label={tag}
+                  size="small"
+                  clickable
+                  onClick={() => toggleTag(tag)}
+                  color={formData.tags.includes(tag) ? 'primary' : 'default'}
+                  variant={formData.tags.includes(tag) ? 'filled' : 'outlined'}
+                />
+              ))}
+            </Box>
+          </Box>
+
+          <Divider />
+
+          {/* 공개 설정 */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 0.5 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               {formData.isPublic

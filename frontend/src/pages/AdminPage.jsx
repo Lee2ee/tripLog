@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Box, Container, Typography, Tabs, Tab, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Paper, Chip,
@@ -6,6 +6,7 @@ import {
   DialogActions, Select, MenuItem, FormControl, InputLabel,
   Alert, CircularProgress, ImageList, ImageListItem, ImageListItemBar,
   TextField, Divider, Tooltip, Stack, Grid, Card, CardContent,
+  InputAdornment,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
@@ -17,6 +18,7 @@ import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SaveIcon from '@mui/icons-material/Save';
+import SearchIcon from '@mui/icons-material/Search';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip as RTooltip, Legend, ResponsiveContainer,
@@ -57,6 +59,9 @@ const AdminPage = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const [tripSearch, setTripSearch] = useState('');
+  const [userSearch, setUserSearch] = useState('');
 
   const [userEditDialog, setUserEditDialog] = useState(EMPTY_USER_EDIT);
   const [userDetailDialog, setUserDetailDialog] = useState({ open: false, user: null });
@@ -112,6 +117,8 @@ const AdminPage = () => {
   useEffect(() => {
     setError('');
     setSettingsSaved(false);
+    setTripSearch('');
+    setUserSearch('');
     if (tab === 0) fetchStats();
     else if (tab === 1) fetchTrips();
     else if (tab === 2) fetchUsers();
@@ -247,6 +254,26 @@ const AdminPage = () => {
     } finally { setSaving(false); }
   };
 
+  /* ── 검색 필터 ─────────────────────────────────────── */
+  const filteredTrips = useMemo(() => {
+    const q = tripSearch.trim().toLowerCase();
+    if (!q) return trips;
+    return trips.filter((t) =>
+      t.title?.toLowerCase().includes(q) ||
+      t.userNickname?.toLowerCase().includes(q) ||
+      t.userEmail?.toLowerCase().includes(q)
+    );
+  }, [trips, tripSearch]);
+
+  const filteredUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter((u) =>
+      u.email?.toLowerCase().includes(q) ||
+      u.nickname?.toLowerCase().includes(q)
+    );
+  }, [users, userSearch]);
+
   /* ── 삭제 핸들러 ───────────────────────────────────── */
   const deleteUser = (u) =>
     openConfirm(`"${u.nickname}" 회원을 삭제하시겠습니까? 해당 회원의 모든 여행 데이터가 함께 삭제됩니다.`, async () => {
@@ -275,8 +302,8 @@ const AdminPage = () => {
 
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}>
         <Tab label="대시보드" />
-        <Tab label={`여행 관리${trips.length ? ` (${trips.length})` : ''}`} />
-        <Tab label={`회원 관리${users.length ? ` (${users.length})` : ''}`} />
+        <Tab label={`여행 관리${trips.length ? ` (${tripSearch ? `${filteredTrips.length}/` : ''}${trips.length})` : ''}`} />
+        <Tab label={`회원 관리${users.length ? ` (${userSearch ? `${filteredUsers.length}/` : ''}${users.length})` : ''}`} />
         <Tab label={`이미지 관리${images.length ? ` (${images.length})` : ''}`} />
         <Tab label="시스템 설정" icon={<SettingsIcon fontSize="small" />} iconPosition="start" />
       </Tabs>
@@ -384,10 +411,25 @@ const AdminPage = () => {
           {/* ─────────────────── 여행 관리 탭 ─────────────────── */}
           {tab === 1 && (
             <Box>
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-                <Button variant="contained" startIcon={<AddIcon />} onClick={openTripCreate}>
-                  새 여행 등록
-                </Button>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
+                <TextField
+                  size="small"
+                  placeholder="제목, 작성자 닉네임, 이메일 검색"
+                  value={tripSearch}
+                  onChange={(e) => setTripSearch(e.target.value)}
+                  InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment> }}
+                  sx={{ minWidth: 280 }}
+                />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  {tripSearch && (
+                    <Typography variant="body2" color="text.secondary">
+                      {filteredTrips.length} / {trips.length}건
+                    </Typography>
+                  )}
+                  <Button variant="contained" startIcon={<AddIcon />} onClick={openTripCreate}>
+                    새 여행 등록
+                  </Button>
+                </Box>
               </Box>
               <TableContainer component={Paper} elevation={2} sx={{ borderRadius: 2 }}>
                 <Table size="small">
@@ -403,13 +445,13 @@ const AdminPage = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {trips.length === 0 ? (
+                    {filteredTrips.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={7} align="center" sx={{ py: 5, color: 'text.secondary' }}>
-                          등록된 여행이 없습니다.
+                          {tripSearch ? '검색 결과가 없습니다.' : '등록된 여행이 없습니다.'}
                         </TableCell>
                       </TableRow>
-                    ) : trips.map((t) => (
+                    ) : filteredTrips.map((t) => (
                       <TableRow key={t.id} hover>
                         <TableCell>{t.id}</TableCell>
                         <TableCell sx={{ fontWeight: 'medium', maxWidth: 200 }}>
@@ -446,6 +488,22 @@ const AdminPage = () => {
 
           {/* ─────────────────── 회원 관리 탭 ─────────────────── */}
           {tab === 2 && (
+            <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+                <TextField
+                  size="small"
+                  placeholder="이메일 또는 닉네임 검색"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment> }}
+                  sx={{ minWidth: 260 }}
+                />
+                {userSearch && (
+                  <Typography variant="body2" color="text.secondary">
+                    {filteredUsers.length} / {users.length}건
+                  </Typography>
+                )}
+              </Box>
             <TableContainer component={Paper} elevation={2} sx={{ borderRadius: 2 }}>
               <Table size="small">
                 <TableHead sx={{ bgcolor: 'grey.100' }}>
@@ -460,11 +518,13 @@ const AdminPage = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {users.length === 0 ? (
+                  {filteredUsers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ py: 5, color: 'text.secondary' }}>회원이 없습니다.</TableCell>
+                      <TableCell colSpan={7} align="center" sx={{ py: 5, color: 'text.secondary' }}>
+                        {userSearch ? '검색 결과가 없습니다.' : '회원이 없습니다.'}
+                      </TableCell>
                     </TableRow>
-                  ) : users.map((u) => (
+                  ) : filteredUsers.map((u) => (
                     <TableRow key={u.id} hover>
                       <TableCell>{u.id}</TableCell>
                       <TableCell>{u.email}</TableCell>
@@ -500,6 +560,7 @@ const AdminPage = () => {
                 </TableBody>
               </Table>
             </TableContainer>
+            </Box>
           )}
 
           {/* ─────────────────── 이미지 관리 탭 ─────────────────── */}

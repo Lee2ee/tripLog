@@ -57,6 +57,28 @@ public class TripController {
         return ResponseEntity.ok(ApiResponse.success("Trip deleted successfully", null));
     }
 
+    @PostMapping("/{id}/copy")
+    public ResponseEntity<ApiResponse<TripResponse>> copyTrip(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        TripResponse trip = tripService.copyTrip(id, userDetails.getUsername());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("여행이 복사되었습니다.", trip));
+    }
+
+    @PatchMapping("/{id}/tags")
+    public ResponseEntity<ApiResponse<TripResponse>> updateTags(
+            @PathVariable UUID id,
+            @RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        @SuppressWarnings("unchecked")
+        java.util.Set<String> tags = body.get("tags") instanceof java.util.List
+                ? new java.util.HashSet<>((java.util.List<String>) body.get("tags"))
+                : new java.util.HashSet<>();
+        TripResponse trip = tripService.updateTags(id, tags, userDetails.getUsername());
+        return ResponseEntity.ok(ApiResponse.success(trip));
+    }
+
     // ── 공개 여행 (인증 불필요) ────────────────────────────────────────
 
     @GetMapping("/public")

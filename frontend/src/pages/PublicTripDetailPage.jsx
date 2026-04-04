@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Container, Box, Typography, Tabs, Tab, CircularProgress, Alert,
   List, ListItem, ListItemText, Chip, Paper, Divider, Breadcrumbs, Link,
+  Tooltip, IconButton, Snackbar, Button,
 } from '@mui/material';
 import { useParams, Link as RouterLink, Navigate } from 'react-router-dom';
 import axiosInstance from '../api/axios';
@@ -12,6 +13,7 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import PersonIcon from '@mui/icons-material/Person';
 import PeopleIcon from '@mui/icons-material/People';
+import ShareIcon from '@mui/icons-material/Share';
 
 const PublicTripDetailPage = () => {
   const { id } = useParams();
@@ -19,6 +21,7 @@ const PublicTripDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState(0);
+  const [snackbar, setSnackbar] = useState('');
 
   const fetchTrip = useCallback(async () => {
     try {
@@ -67,7 +70,7 @@ const PublicTripDetailPage = () => {
 
       {/* 헤더 */}
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 1 }}>
-        <Box>
+        <Box sx={{ flex: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
             <Typography variant="h4" fontWeight="bold" sx={{ wordBreak: 'keep-all' }}>
               {trip.title}
@@ -88,7 +91,22 @@ const PublicTripDetailPage = () => {
               </>
             )}
           </Box>
+          {trip.tags && trip.tags.length > 0 && (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.7, mt: 1 }}>
+              {[...trip.tags].map((tag) => (
+                <Chip key={tag} label={tag} size="small" color="primary" variant="outlined" />
+              ))}
+            </Box>
+          )}
         </Box>
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<ShareIcon />}
+          onClick={() => navigator.clipboard.writeText(window.location.href).then(() => setSnackbar('링크가 복사되었습니다.'))}
+        >
+          공유
+        </Button>
       </Box>
 
       {/* 일자 탭 */}
@@ -180,6 +198,14 @@ const PublicTripDetailPage = () => {
       ) : (
         <Alert severity="info">이 여행에 등록된 날짜가 없습니다.</Alert>
       )}
+
+      <Snackbar
+        open={!!snackbar}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar('')}
+        message={snackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
     </Container>
   );
 };

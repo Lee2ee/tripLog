@@ -2,6 +2,7 @@ package com.triplog.service;
 
 import com.triplog.dto.request.TripRequest;
 import com.triplog.dto.response.*;
+import com.triplog.entity.Location;
 import com.triplog.entity.Trip;
 import com.triplog.entity.TripDay;
 import com.triplog.entity.User;
@@ -18,6 +19,8 @@ import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.UUID;
+import java.util.Set;
+import java.util.HashSet;
 
 @Slf4j
 @Service
@@ -57,6 +60,7 @@ public class TripService {
                 .startDate(request.getStartDate())
                 .endDate(request.getEndDate())
                 .isPublic(Boolean.TRUE.equals(request.getIsPublic()))
+                .tags(request.getTags() != null ? new HashSet<>(request.getTags()) : new HashSet<>())
                 .build();
         trip = tripRepository.save(trip);
 
@@ -122,6 +126,53 @@ public class TripService {
         trip.setPublic(isPublic);
         tripRepository.save(trip);
         log.info("Trip {} visibility set to {} by {}", tripId, isPublic ? "public" : "private", email);
+        return mapToTripSummary(trip, email);
+    }
+
+    @Transactional
+    public TripResponse copyTrip(UUID tripId, String email) {
+        Trip original = findTripById(tripId);
+        requireOwner(original, email, "여행 복사는 소유자만 할 수 있습니다.");
+        User user = findUserByEmail(email);
+
+        Trip copy = Trip.builder()
+                .user(user)
+                .title(original.getTitle() + " 복사")
+                .startDate(original.getStartDate())
+                .endDate(original.getEndDate())
+                .isPublic(false)
+                .tags(new HashSet<>(original.getTags()))
+                .build();
+        copy = tripRepository.save(copy);
+
+        for (TripDay day : tripDayRepository.findByTripIdOrderByDate(original.getId())) {
+            TripDay newDay = tripDayRepository.save(
+                    TripDay.builder().trip(copy).date(day.getDate()).build());
+            for (Location loc : locationRepository.findByTripDayIdOrderByOrderIndex(day.getId())) {
+                locationRepository.save(Location.builder()
+                        .tripDay(newDay)
+                        .name(loc.getName())
+                        .latitude(loc.getLatitude())
+                        .longitude(loc.getLongitude())
+                        .orderIndex(loc.getOrderIndex())
+                        .category(loc.getCategory())
+                        .memo(loc.getMemo())
+                        .transportMode(loc.getTransportMode())
+                        .build());
+            }
+        }
+        log.info("Trip {} copied by {}", tripId, email);
+        return mapToTripSummary(copy, email);
+    }
+
+    @Transactional
+    public TripResponse updateTags(UUID tripId, Set<String> tags, String email) {
+        Trip trip = findTripById(tripId);
+        requireOwner(trip, email, "태그 수정은 소유자만 할 수 있습니다.");
+        trip.getTags().clear();
+        trip.getTags().addAll(tags);
+        tripRepository.save(trip);
+        log.info("Tags updated for trip {} by {}", tripId, email);
         return mapToTripSummary(trip, email);
     }
 
@@ -262,12 +313,16 @@ public class TripService {
     }
 
     private TripResponse mapToTripSummary(Trip trip, String email) {
+        String coverImageUrl = tripImageRepository.findFirstByTripId(trip.getId())
+                .map(img -> img.getImageUrl()).orElse(null);
         return TripResponse.builder()
                 .id(trip.getId())
                 .title(trip.getTitle())
                 .startDate(trip.getStartDate())
                 .endDate(trip.getEndDate())
                 .createdAt(trip.getCreatedAt())
+                .coverImageUrl(coverImageUrl)
+                .tags(trip.getTags())
                 .isPublic(trip.isPublic())
                 .ownerId(trip.getUser().getId())
                 .ownerNickname(trip.getUser().getNickname())
@@ -279,12 +334,16 @@ public class TripService {
     }
 
     private TripResponse mapToPublicTripSummary(Trip trip) {
+        String coverImageUrl = tripImageRepository.findFirstByTripId(trip.getId())
+                .map(img -> img.getImageUrl()).orElse(null);
         return TripResponse.builder()
                 .id(trip.getId())
                 .title(trip.getTitle())
                 .startDate(trip.getStartDate())
                 .endDate(trip.getEndDate())
                 .createdAt(trip.getCreatedAt())
+                .coverImageUrl(coverImageUrl)
+                .tags(trip.getTags())
                 .isPublic(true)
                 .ownerId(trip.getUser().getId())
                 .ownerNickname(trip.getUser().getNickname())
@@ -339,6 +398,7 @@ public class TripService {
                 .startDate(trip.getStartDate())
                 .endDate(trip.getEndDate())
                 .createdAt(trip.getCreatedAt())
+                .tags(trip.getTags())
                 .isPublic(trip.isPublic())
                 .ownerId(trip.getUser().getId())
                 .ownerNickname(trip.getUser().getNickname())

@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.util.Set;
 
 @Getter
 @Setter
@@ -22,4 +23,6 @@ public class TripRequest {
 
     // null → false (기본 비공개)
     private Boolean isPublic;
+
+    private Set<String> tags;
 }
