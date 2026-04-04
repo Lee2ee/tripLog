@@ -31,4 +31,8 @@ public class CustomException extends RuntimeException {
     public static CustomException conflict(String message) {
         return new CustomException(message, HttpStatus.CONFLICT);
     }
+
+    public static CustomException tooManyRequests(String message) {
+        return new CustomException(message, HttpStatus.TOO_MANY_REQUESTS);
+    }
 }

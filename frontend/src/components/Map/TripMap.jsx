@@ -52,8 +52,10 @@ const syncMarkers = (mapInstance, locs, markersRef, onMarkerClick) => {
   });
 };
 
-const TripMap = ({ locations = [] }) => {
+const TripMap = ({ locations = [], onLocationSelect }) => {
   const [selectedMarker, setSelectedMarker] = useState(null);
+  const onLocationSelectRef = useRef(onLocationSelect);
+  onLocationSelectRef.current = onLocationSelect;
   const [routeDistance, setRouteDistance] = useState(null);
   const [routeError, setRouteError] = useState(false);
 
@@ -62,6 +64,7 @@ const TripMap = ({ locations = [] }) => {
   const renderersRef = useRef([]);
   const fallbackPolysRef = useRef([]);
   const fetchGenRef = useRef(0);
+  const routeDebounceRef = useRef(null);
 
   const locationsRef = useRef(locations);
   locationsRef.current = locations;
@@ -156,12 +159,17 @@ const TripMap = ({ locations = [] }) => {
     });
   }, [clearRoute]);
 
+  const handleMarkerClick = useCallback((loc) => {
+    setSelectedMarker(loc);
+    onLocationSelectRef.current?.(loc);
+  }, []);
+
   const onMapLoad = useCallback((mapInstance) => {
     mapRef.current = mapInstance;
-    syncMarkers(mapInstance, locationsRef.current, markersRef, setSelectedMarker);
+    syncMarkers(mapInstance, locationsRef.current, markersRef, handleMarkerClick);
     fetchRoute(mapInstance, locationsRef.current);
     applyBounds(mapInstance, locationsRef.current);
-  }, [fetchRoute]);
+  }, [fetchRoute, handleMarkerClick]);
 
   const onMapUnmount = useCallback(() => {
     clearRoute();
@@ -170,13 +178,21 @@ const TripMap = ({ locations = [] }) => {
     mapRef.current = null;
   }, [clearRoute]);
 
-  // 장소 목록 변경 시
+  // 장소 목록 변경 시 — 마커·경계는 즉시, 경로는 500ms 디바운스
   useEffect(() => {
     if (!mapRef.current) return;
-    syncMarkers(mapRef.current, locations, markersRef, setSelectedMarker);
-    fetchRoute(mapRef.current, locations);
+    syncMarkers(mapRef.current, locations, markersRef, handleMarkerClick);
     applyBounds(mapRef.current, locations);
-  }, [locations, fetchRoute]);
+
+    if (routeDebounceRef.current) clearTimeout(routeDebounceRef.current);
+    routeDebounceRef.current = setTimeout(() => {
+      fetchRoute(mapRef.current, locations);
+    }, 500);
+
+    return () => {
+      if (routeDebounceRef.current) clearTimeout(routeDebounceRef.current);
+    };
+  }, [locations, fetchRoute, handleMarkerClick]);
 
   const straightDistance = calculateTotalDistance(locations);
   const distanceLabel = routeDistance

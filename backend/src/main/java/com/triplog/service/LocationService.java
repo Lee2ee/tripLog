@@ -2,20 +2,24 @@ package com.triplog.service;
 
 import com.triplog.dto.request.LocationReorderRequest;
 import com.triplog.dto.request.LocationRequest;
+import com.triplog.dto.response.ImageResponse;
 import com.triplog.dto.response.LocationResponse;
 import com.triplog.entity.Location;
 import com.triplog.entity.Trip;
 import com.triplog.entity.TripDay;
 import com.triplog.exception.CustomException;
+import com.triplog.repository.LocationImageRepository;
 import com.triplog.repository.LocationRepository;
 import com.triplog.repository.TripDayRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -24,11 +28,13 @@ import java.util.stream.Collectors;
 public class LocationService {
 
     private final LocationRepository locationRepository;
+    private final LocationImageRepository locationImageRepository;
     private final TripDayRepository tripDayRepository;
     private final TripService tripService;
+    @Lazy private final SettingsService settingsService;
 
     @Transactional
-    public LocationResponse addLocation(Long tripId, Long dayId, LocationRequest request, String email) {
+    public LocationResponse addLocation(UUID tripId, Long dayId, LocationRequest request, String email) {
         TripDay tripDay = tripDayRepository.findById(dayId)
                 .orElseThrow(() -> CustomException.notFound("Trip day not found: " + dayId));
 
@@ -37,6 +43,14 @@ public class LocationService {
         }
 
         requireAccess(tripDay.getTrip(), email);
+
+        int maxLocations = settingsService.getMaxLocationsPerDay();
+        if (maxLocations > 0) {
+            long count = locationRepository.countByTripDayId(dayId);
+            if (count >= maxLocations) {
+                throw CustomException.badRequest("하루당 최대 " + maxLocations + "개의 장소만 등록할 수 있습니다.");
+            }
+        }
 
         Location location = Location.builder()
                 .tripDay(tripDay)
@@ -86,7 +100,7 @@ public class LocationService {
     }
 
     @Transactional
-    public List<LocationResponse> reorderLocations(Long tripId, Long dayId, LocationReorderRequest request, String email) {
+    public List<LocationResponse> reorderLocations(UUID tripId, Long dayId, LocationReorderRequest request, String email) {
         TripDay tripDay = tripDayRepository.findById(dayId)
                 .orElseThrow(() -> CustomException.notFound("Trip day not found: " + dayId));
 
@@ -124,6 +138,9 @@ public class LocationService {
     }
 
     private LocationResponse mapToResponse(Location location) {
+        List<ImageResponse> images = locationImageRepository.findByLocationId(location.getId()).stream()
+                .map(img -> ImageResponse.builder().id(img.getId()).imageUrl(img.getImageUrl()).build())
+                .collect(Collectors.toList());
         return LocationResponse.builder()
                 .id(location.getId())
                 .name(location.getName())
@@ -133,6 +150,7 @@ public class LocationService {
                 .category(location.getCategory())
                 .memo(location.getMemo())
                 .transportMode(location.getTransportMode())
+                .images(images)
                 .build();
     }
 }

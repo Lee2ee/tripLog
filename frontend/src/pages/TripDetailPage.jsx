@@ -3,7 +3,7 @@ import {
   Container, Box, Typography, Tabs, Tab, CircularProgress, Alert,
   List, ListItem, ListItemText, ListItemSecondaryAction, ListItemAvatar,
   Avatar, IconButton, Chip, Paper, Divider, Breadcrumbs, Link, Tooltip,
-  TextField, Button, Stack,
+  TextField, Button, Stack, Badge,
   Dialog, DialogTitle, DialogContent, DialogActions,
   ToggleButton, ToggleButtonGroup, MenuItem,
 } from '@mui/material';
@@ -35,6 +35,8 @@ import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import DirectionsWalkIcon from '@mui/icons-material/DirectionsWalk';
 import DirectionsTransitIcon from '@mui/icons-material/DirectionsTransit';
 import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 
 const TRANSPORT_ICONS = {
   DRIVING:   { icon: <DirectionsCarIcon sx={{ fontSize: 14 }} />,     color: '#1976d2', label: '자동차' },
@@ -185,8 +187,134 @@ const EditLocationDialog = ({ open, loc, isFirst, onClose, onSave }) => {
   );
 };
 
+/* ── 장소 이미지 갤러리 패널 (우측 패널) ── */
+const LocationGalleryPanel = ({ locations, selectedLocId, canEdit, onImageUploaded, onImageDeleted }) => {
+  const [uploading, setUploading] = React.useState(false);
+  const [enlarged, setEnlarged] = React.useState(null);
+
+  const selectedLoc = locations.find((l) => l.id === selectedLocId) || null;
+  const images = selectedLoc?.images || [];
+
+  const handleUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !selectedLoc) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await axiosInstance.post(
+        `/locations/${selectedLoc.id}/images`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      onImageUploaded(selectedLoc.id, res.data.data);
+    } catch { /* ignore */ } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDelete = async (imageId) => {
+    if (!window.confirm('이 사진을 삭제하시겠습니까?')) return;
+    try {
+      await axiosInstance.delete(`/locations/${selectedLoc.id}/images/${imageId}`);
+      onImageDeleted(selectedLoc.id, imageId);
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <Paper variant="outlined" sx={{ borderRadius: 2 }}>
+      <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+        <PhotoCameraIcon color="action" fontSize="small" />
+        <Typography variant="subtitle1" fontWeight="bold">
+          {selectedLoc ? `${selectedLoc.name} 사진` : '장소 사진'}
+        </Typography>
+        {selectedLoc && <Chip label={images.length} size="small" sx={{ ml: 'auto' }} />}
+      </Box>
+      <Divider />
+
+      {!selectedLoc ? (
+        <Box sx={{ p: 4, textAlign: 'center' }}>
+          <PhotoCameraIcon sx={{ fontSize: 40, color: 'grey.300', mb: 1 }} />
+          <Typography variant="body2" color="text.secondary">
+            지도의 핀 또는 목록의 카메라 아이콘을 눌러<br />장소 사진을 확인하세요
+          </Typography>
+        </Box>
+      ) : (
+        <Box sx={{ p: 2 }}>
+          {images.length > 0 ? (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
+              {images.map((img) => (
+                <Box key={img.id} sx={{ position: 'relative', width: 96, height: 96, flexShrink: 0 }}>
+                  <Box
+                    component="img"
+                    src={img.imageUrl}
+                    alt=""
+                    onClick={() => setEnlarged(img.imageUrl)}
+                    sx={{
+                      width: 96, height: 96, objectFit: 'cover', borderRadius: 1.5,
+                      cursor: 'pointer', border: '1px solid', borderColor: 'divider',
+                      display: 'block',
+                      '&:hover': { opacity: 0.85 },
+                    }}
+                  />
+                  {canEdit && (
+                    <IconButton
+                      size="small"
+                      onClick={() => handleDelete(img.id)}
+                      sx={{
+                        position: 'absolute', top: 4, right: 4,
+                        bgcolor: 'rgba(0,0,0,0.45)', color: 'white', p: '2px',
+                        width: 22, height: 22,
+                        '&:hover': { bgcolor: 'rgba(0,0,0,0.75)' },
+                      }}
+                    >
+                      <DeleteIcon sx={{ fontSize: 13 }} />
+                    </IconButton>
+                  )}
+                </Box>
+              ))}
+            </Box>
+          ) : (
+            <Box sx={{ py: 2, textAlign: 'center' }}>
+              <Typography variant="body2" color="text.secondary">등록된 사진이 없습니다</Typography>
+            </Box>
+          )}
+
+          {canEdit && (
+            <Box component="label" sx={{ display: 'inline-flex' }}>
+              <input type="file" accept="image/*" hidden onChange={handleUpload} disabled={uploading} />
+              <Button
+                component="span"
+                size="small"
+                variant="outlined"
+                startIcon={uploading ? <CircularProgress size={13} /> : <CloudUploadIcon fontSize="small" />}
+                disabled={uploading}
+                sx={{ fontSize: '0.75rem' }}
+              >
+                {uploading ? '업로드 중...' : '사진 추가'}
+              </Button>
+            </Box>
+          )}
+        </Box>
+      )}
+
+      <Dialog open={!!enlarged} onClose={() => setEnlarged(null)} maxWidth="xl"
+        PaperProps={{ sx: { bgcolor: 'transparent', boxShadow: 'none' } }}>
+        <DialogContent sx={{ p: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <IconButton onClick={() => setEnlarged(null)}
+            sx={{ position: 'absolute', top: 8, right: 8, bgcolor: 'rgba(0,0,0,0.6)', color: 'white', zIndex: 1, '&:hover': { bgcolor: 'rgba(0,0,0,0.8)' } }}>
+            ✕
+          </IconButton>
+          {enlarged && (
+            <Box component="img" src={enlarged} alt="" sx={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: 2, objectFit: 'contain' }} />
+          )}
+        </DialogContent>
+      </Dialog>
+    </Paper>
+  );
+};
+
 /* ── 드래그 가능한 장소 아이템 ── */
-const SortableLocationItem = ({ loc, index, dayId, onDelete, onEdit, deleteLoading, canEdit }) => {
+const SortableLocationItem = ({ loc, index, dayId, onDelete, onEdit, deleteLoading, canEdit, selectedLocId, onSelectLoc }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: loc.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -195,6 +323,8 @@ const SortableLocationItem = ({ loc, index, dayId, onDelete, onEdit, deleteLoadi
     background: isDragging ? '#f5f5f5' : 'transparent',
   };
   const transport = loc.transportMode ? TRANSPORT_ICONS[loc.transportMode] : null;
+  const isPhotoOpen = selectedLocId === loc.id;
+  const imageCount = (loc.images || []).length;
 
   return (
     <>
@@ -259,23 +389,34 @@ const SortableLocationItem = ({ loc, index, dayId, onDelete, onEdit, deleteLoadi
           primaryTypographyProps={{ fontWeight: 'medium', sx: { wordBreak: 'keep-all' } }}
           secondaryTypographyProps={{ component: 'span' }}
         />
-        {canEdit && (
-          <ListItemSecondaryAction sx={{ display: 'flex', gap: 0.5 }}>
-            <Tooltip title="장소 수정">
-              <IconButton size="small" color="primary" onClick={() => onEdit(loc)}>
-                <EditIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="장소 삭제">
-              <IconButton size="small" color="error"
-                onClick={() => onDelete(dayId, loc.id)}
-                disabled={deleteLoading === loc.id}>
-                {deleteLoading === loc.id ? <CircularProgress size={16} color="error" /> : <DeleteIcon fontSize="small" />}
-              </IconButton>
-            </Tooltip>
-          </ListItemSecondaryAction>
-        )}
+        <ListItemSecondaryAction sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+          <Tooltip title="장소 사진">
+            <IconButton size="small" onClick={() => onSelectLoc(loc.id)}
+              color={isPhotoOpen ? 'primary' : 'default'}>
+              <Badge badgeContent={imageCount || null} color="primary" sx={{ '& .MuiBadge-badge': { fontSize: 9, minWidth: 14, height: 14 } }}>
+                <PhotoCameraIcon fontSize="small" />
+              </Badge>
+            </IconButton>
+          </Tooltip>
+          {canEdit && (
+            <>
+              <Tooltip title="장소 수정">
+                <IconButton size="small" color="primary" onClick={() => onEdit(loc)}>
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="장소 삭제">
+                <IconButton size="small" color="error"
+                  onClick={() => onDelete(dayId, loc.id)}
+                  disabled={deleteLoading === loc.id}>
+                  {deleteLoading === loc.id ? <CircularProgress size={16} color="error" /> : <DeleteIcon fontSize="small" />}
+                </IconButton>
+              </Tooltip>
+            </>
+          )}
+        </ListItemSecondaryAction>
       </ListItem>
+
     </>
   );
 };
@@ -293,7 +434,9 @@ const TripDetailPage = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [deleteLoading, setDeleteLoading] = useState(null);
   const [visibilityLoading, setVisibilityLoading] = useState(false);
-  const [editingLoc, setEditingLoc] = useState(null); // 수정 중인 장소
+  const [editingLoc, setEditingLoc] = useState(null);
+  const [selectedLocId, setSelectedLocId] = useState(null); // 갤러리에 표시할 장소
+  const [memberDialogOpen, setMemberDialogOpen] = useState(false);
 
   // 멤버 관리
   const [searchQuery, setSearchQuery] = useState('');
@@ -369,6 +512,42 @@ const TripDetailPage = () => {
       tripDays: prev.tripDays.map((day) => ({
         ...day,
         locations: day.locations.map((loc) => loc.id === locationId ? updated : loc),
+      })),
+    }));
+  };
+
+  const handleSelectLoc = (locId) => {
+    setSelectedLocId((prev) => (prev === locId ? null : locId));
+  };
+
+  const handleMapPinClick = (loc) => {
+    setSelectedLocId(loc.id);
+  };
+
+  const handleImageUploaded = (locId, newImage) => {
+    setTrip((prev) => ({
+      ...prev,
+      tripDays: prev.tripDays.map((day) => ({
+        ...day,
+        locations: day.locations.map((loc) =>
+          loc.id === locId
+            ? { ...loc, images: [...(loc.images || []), newImage] }
+            : loc
+        ),
+      })),
+    }));
+  };
+
+  const handleImageDeleted = (locId, imageId) => {
+    setTrip((prev) => ({
+      ...prev,
+      tripDays: prev.tripDays.map((day) => ({
+        ...day,
+        locations: day.locations.map((loc) =>
+          loc.id === locId
+            ? { ...loc, images: (loc.images || []).filter((img) => img.id !== imageId) }
+            : loc
+        ),
       })),
     }));
   };
@@ -508,6 +687,17 @@ const TripDetailPage = () => {
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<PeopleIcon />}
+            onClick={() => setMemberDialogOpen(true)}
+          >
+            멤버 관리
+            {(trip.memberCount > 0) && (
+              <Chip label={trip.memberCount + 1} size="small" sx={{ ml: 0.5, height: 18, fontSize: '0.7rem' }} />
+            )}
+          </Button>
           {isOwner && (
             <Button
               variant="outlined"
@@ -534,7 +724,7 @@ const TripDetailPage = () => {
       {trip.tripDays && trip.tripDays.length > 0 ? (
         <>
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-            <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} variant="scrollable" scrollButtons="auto">
+            <Tabs value={activeTab} onChange={(_, v) => { setActiveTab(v); setSelectedLocId(null); }} variant="scrollable" scrollButtons="auto">
               {trip.tripDays.map((day, index) => (
                 <Tab
                   key={day.id}
@@ -587,6 +777,8 @@ const TripDetailPage = () => {
                               onEdit={setEditingLoc}
                               deleteLoading={deleteLoading}
                               canEdit={isOwner || true}
+                              selectedLocId={selectedLocId}
+                              onSelectLoc={handleSelectLoc}
                             />
                           ))}
                         </List>
@@ -601,34 +793,30 @@ const TripDetailPage = () => {
                 </Paper>
 
                 <AddLocationForm
-                  tripId={parseInt(id)}
+                  tripId={id}
                   dayId={activeDay.id}
                   onLocationAdded={(payload) => handleAddLocation(activeDay.id, payload)}
                   existingCount={activeDay.locations?.length || 0}
                 />
               </Box>
 
-              {/* 우측: 지도 + 멤버 패널 */}
+              {/* 우측: 지도 + 장소 이미지 갤러리 */}
               <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
                 <Box>
                   <Typography variant="subtitle1" fontWeight="bold" gutterBottom>경로 지도</Typography>
-                  <TripMap key={activeDay.id} locations={activeDay.locations || []} />
+                  <TripMap
+                    key={activeDay.id}
+                    locations={activeDay.locations || []}
+                    onLocationSelect={handleMapPinClick}
+                  />
                 </Box>
 
-                {/* 멤버 패널 */}
-                <MemberPanel
-                  trip={trip}
-                  isOwner={isOwner}
-                  currentUser={currentUser}
-                  searchQuery={searchQuery}
-                  searchResults={searchResults}
-                  searchLoading={searchLoading}
-                  inviteLoading={inviteLoading}
-                  inviteError={inviteError}
-                  memberActionLoading={memberActionLoading}
-                  onSearch={handleSearch}
-                  onInvite={handleInvite}
-                  onRemoveMember={handleRemoveMember}
+                <LocationGalleryPanel
+                  locations={activeDay.locations || []}
+                  selectedLocId={selectedLocId}
+                  canEdit={isOwner || true}
+                  onImageUploaded={handleImageUploaded}
+                  onImageDeleted={handleImageDeleted}
                 />
               </Box>
             </Box>
@@ -637,6 +825,33 @@ const TripDetailPage = () => {
       ) : (
         <Alert severity="info">이 여행에 등록된 날짜가 없습니다.</Alert>
       )}
+
+      {/* 멤버 관리 다이얼로그 */}
+      <Dialog open={memberDialogOpen} onClose={() => setMemberDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <PeopleIcon fontSize="small" />
+          여행 멤버
+        </DialogTitle>
+        <DialogContent sx={{ p: 0 }}>
+          <MemberPanel
+            trip={trip}
+            isOwner={isOwner}
+            currentUser={currentUser}
+            searchQuery={searchQuery}
+            searchResults={searchResults}
+            searchLoading={searchLoading}
+            inviteLoading={inviteLoading}
+            inviteError={inviteError}
+            memberActionLoading={memberActionLoading}
+            onSearch={handleSearch}
+            onInvite={handleInvite}
+            onRemoveMember={handleRemoveMember}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMemberDialogOpen(false)}>닫기</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* 장소 수정 다이얼로그 */}
       <EditLocationDialog

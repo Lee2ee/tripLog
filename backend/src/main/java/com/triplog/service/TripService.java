@@ -10,12 +10,14 @@ import com.triplog.entity.Notification;
 import com.triplog.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -25,9 +27,11 @@ public class TripService {
     private final TripRepository tripRepository;
     private final TripDayRepository tripDayRepository;
     private final LocationRepository locationRepository;
+    private final LocationImageRepository locationImageRepository;
     private final TripImageRepository tripImageRepository;
     private final UserRepository userRepository;
     private final NotificationRepository notificationRepository;
+    @Lazy private final SettingsService settingsService;
 
     // ── 여행 CRUD ──────────────────────────────────────────────────────
 
@@ -38,6 +42,14 @@ public class TripService {
         }
 
         User user = findUserByEmail(email);
+
+        int maxTrips = settingsService.getMaxTripsPerUser();
+        if (maxTrips > 0) {
+            long count = tripRepository.countByUserId(user.getId());
+            if (count >= maxTrips) {
+                throw CustomException.badRequest("최대 " + maxTrips + "개의 여행만 등록할 수 있습니다.");
+            }
+        }
 
         Trip trip = Trip.builder()
                 .user(user)
@@ -69,7 +81,7 @@ public class TripService {
         List<Trip> memberTrips = tripRepository.findMemberTripsByUserId(user.getId());
 
         // owned first, then member trips not already included
-        Map<Long, Trip> combined = new LinkedHashMap<>();
+        Map<UUID, Trip> combined = new LinkedHashMap<>();
         ownedTrips.forEach(t -> combined.put(t.getId(), t));
         memberTrips.forEach(t -> combined.putIfAbsent(t.getId(), t));
 
@@ -79,7 +91,7 @@ public class TripService {
     }
 
     @Transactional(readOnly = true)
-    public TripResponse getTripById(Long tripId, String email) {
+    public TripResponse getTripById(UUID tripId, String email) {
         Trip trip = findTripById(tripId);
         requireAccess(trip, email);
         return mapToTripResponseFull(trip, email);
@@ -95,7 +107,7 @@ public class TripService {
     }
 
     @Transactional(readOnly = true)
-    public TripResponse getPublicTripById(Long tripId) {
+    public TripResponse getPublicTripById(UUID tripId) {
         Trip trip = findTripById(tripId);
         if (!trip.isPublic()) {
             throw CustomException.forbidden("비공개 여행입니다.");
@@ -104,7 +116,7 @@ public class TripService {
     }
 
     @Transactional
-    public TripResponse updateVisibility(Long tripId, boolean isPublic, String email) {
+    public TripResponse updateVisibility(UUID tripId, boolean isPublic, String email) {
         Trip trip = findTripById(tripId);
         requireOwner(trip, email, "공개/비공개 설정은 소유자만 변경할 수 있습니다.");
         trip.setPublic(isPublic);
@@ -114,7 +126,7 @@ public class TripService {
     }
 
     @Transactional
-    public void deleteTrip(Long tripId, String email) {
+    public void deleteTrip(UUID tripId, String email) {
         Trip trip = findTripById(tripId);
         requireOwner(trip, email, "Only the trip owner can delete this trip");
         tripRepository.delete(trip);
@@ -124,7 +136,7 @@ public class TripService {
     // ── 멤버 관리 ──────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public List<TripMemberResponse> getMembers(Long tripId, String email) {
+    public List<TripMemberResponse> getMembers(UUID tripId, String email) {
         Trip trip = findTripById(tripId);
         requireAccess(trip, email);
         return trip.getMembers().stream()
@@ -133,7 +145,7 @@ public class TripService {
     }
 
     @Transactional
-    public TripMemberResponse inviteMemberById(Long tripId, Long inviteeId, String requesterEmail) {
+    public TripMemberResponse inviteMemberById(UUID tripId, Long inviteeId, String requesterEmail) {
         Trip trip = findTripById(tripId);
         requireOwner(trip, requesterEmail, "Only the trip owner can invite members");
 
@@ -166,7 +178,7 @@ public class TripService {
     }
 
     @Transactional
-    public void removeMember(Long tripId, Long memberId, String requesterEmail) {
+    public void removeMember(UUID tripId, Long memberId, String requesterEmail) {
         Trip trip = findTripById(tripId);
         User requester = findUserByEmail(requesterEmail);
 
@@ -190,7 +202,7 @@ public class TripService {
     }
 
     @Transactional
-    public void leaveTrip(Long tripId, String email) {
+    public void leaveTrip(UUID tripId, String email) {
         Trip trip = findTripById(tripId);
         if (isOwner(trip, email)) {
             throw CustomException.badRequest("소유자는 여행에서 나갈 수 없습니다. 여행을 삭제해주세요.");
@@ -229,7 +241,7 @@ public class TripService {
 
     // ── 조회 헬퍼 ──────────────────────────────────────────────────────
 
-    private Trip findTripById(Long tripId) {
+    private Trip findTripById(UUID tripId) {
         return tripRepository.findById(tripId)
                 .orElseThrow(() -> CustomException.notFound("Trip not found: " + tripId));
     }
@@ -288,15 +300,22 @@ public class TripService {
                 .map(day -> {
                     List<LocationResponse> locations = locationRepository
                             .findByTripDayIdOrderByOrderIndex(day.getId()).stream()
-                            .map(loc -> LocationResponse.builder()
-                                    .id(loc.getId())
-                                    .name(loc.getName())
-                                    .latitude(loc.getLatitude())
-                                    .longitude(loc.getLongitude())
-                                    .orderIndex(loc.getOrderIndex())
-                                    .category(loc.getCategory())
-                                    .memo(loc.getMemo())
-                                    .build())
+                            .map(loc -> {
+                                List<ImageResponse> locImages = locationImageRepository.findByLocationId(loc.getId()).stream()
+                                        .map(img -> ImageResponse.builder().id(img.getId()).imageUrl(img.getImageUrl()).build())
+                                        .collect(Collectors.toList());
+                                return LocationResponse.builder()
+                                        .id(loc.getId())
+                                        .name(loc.getName())
+                                        .latitude(loc.getLatitude())
+                                        .longitude(loc.getLongitude())
+                                        .orderIndex(loc.getOrderIndex())
+                                        .category(loc.getCategory())
+                                        .memo(loc.getMemo())
+                                        .transportMode(loc.getTransportMode())
+                                        .images(locImages)
+                                        .build();
+                            })
                             .collect(Collectors.toList());
                     return TripDayResponse.builder()
                             .id(day.getId())

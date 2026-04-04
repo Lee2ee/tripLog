@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Getter
 @Builder
 @NoArgsConstructor
@@ -18,4 +20,5 @@ public class LocationResponse {
     private String category;
     private String memo;
     private String transportMode;
+    private List<ImageResponse> images;
 }

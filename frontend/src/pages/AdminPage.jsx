@@ -15,6 +15,8 @@ import PeopleIcon from '@mui/icons-material/People';
 import ExploreIcon from '@mui/icons-material/Explore';
 import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import SettingsIcon from '@mui/icons-material/Settings';
+import SaveIcon from '@mui/icons-material/Save';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip as RTooltip, Legend, ResponsiveContainer,
@@ -25,6 +27,7 @@ import api from '../api/axios';
 const EMPTY_CONFIRM = { open: false, action: null, label: '' };
 const EMPTY_USER_EDIT = { open: false, user: null, email: '', nickname: '', role: '', newPassword: '', errors: {} };
 const EMPTY_TRIP_DIALOG = { open: false, mode: 'create', trip: null, userId: '', title: '', startDate: '', endDate: '', errors: {} };
+const EMPTY_SETTINGS = { maxTripsPerUser: 100, maxLocationsPerDay: 20, maxImagesPerTrip: 50 };
 
 /* ── 통계 카드 컴포넌트 ──────────────────────────────── */
 const StatCard = ({ icon, label, value, color }) => (
@@ -48,6 +51,9 @@ const AdminPage = () => {
   const [users, setUsers] = useState([]);
   const [trips, setTrips] = useState([]);
   const [images, setImages] = useState([]);
+  const [settings, setSettings] = useState(EMPTY_SETTINGS);
+  const [settingsErrors, setSettingsErrors] = useState({});
+  const [settingsSaved, setSettingsSaved] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -94,13 +100,24 @@ const AdminPage = () => {
     finally { setLoading(false); }
   }, []);
 
+  const fetchSettings = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/admin/settings');
+      setSettings(res.data.data);
+    } catch { setError('설정을 불러오지 못했습니다.'); }
+    finally { setLoading(false); }
+  }, []);
+
   useEffect(() => {
     setError('');
+    setSettingsSaved(false);
     if (tab === 0) fetchStats();
     else if (tab === 1) fetchTrips();
     else if (tab === 2) fetchUsers();
-    else fetchImages();
-  }, [tab, fetchStats, fetchTrips, fetchUsers, fetchImages]);
+    else if (tab === 3) fetchImages();
+    else fetchSettings();
+  }, [tab, fetchStats, fetchTrips, fetchUsers, fetchImages, fetchSettings]);
 
   /* ── 삭제 확인 ─────────────────────────────────────── */
   const openConfirm = (label, action) => setConfirmDialog({ open: true, action, label });
@@ -198,6 +215,38 @@ const AdminPage = () => {
     } finally { setSaving(false); }
   };
 
+  /* ── 설정 ──────────────────────────────────────────── */
+  const handleSettingsChange = (field) => (e) => {
+    const val = parseInt(e.target.value, 10);
+    setSettings((p) => ({ ...p, [field]: isNaN(val) ? '' : val }));
+    setSettingsErrors((p) => ({ ...p, [field]: '' }));
+    setSettingsSaved(false);
+  };
+
+  const validateSettings = () => {
+    const errs = {};
+    if (settings.maxTripsPerUser === '' || settings.maxTripsPerUser < 0)
+      errs.maxTripsPerUser = '0 이상 숫자를 입력하세요 (0 = 무제한)';
+    if (settings.maxLocationsPerDay === '' || settings.maxLocationsPerDay < 0)
+      errs.maxLocationsPerDay = '0 이상 숫자를 입력하세요 (0 = 무제한)';
+    if (!settings.maxImagesPerTrip || settings.maxImagesPerTrip < 1)
+      errs.maxImagesPerTrip = '1 이상 숫자를 입력하세요';
+    return errs;
+  };
+
+  const handleSettingsSave = async () => {
+    const errs = validateSettings();
+    if (Object.keys(errs).length > 0) { setSettingsErrors(errs); return; }
+    setSaving(true);
+    try {
+      const res = await api.put('/admin/settings', settings);
+      setSettings(res.data.data);
+      setSettingsSaved(true);
+    } catch (e) {
+      setSettingsErrors({ server: e.response?.data?.message || '설정 저장에 실패했습니다.' });
+    } finally { setSaving(false); }
+  };
+
   /* ── 삭제 핸들러 ───────────────────────────────────── */
   const deleteUser = (u) =>
     openConfirm(`"${u.nickname}" 회원을 삭제하시겠습니까? 해당 회원의 모든 여행 데이터가 함께 삭제됩니다.`, async () => {
@@ -229,6 +278,7 @@ const AdminPage = () => {
         <Tab label={`여행 관리${trips.length ? ` (${trips.length})` : ''}`} />
         <Tab label={`회원 관리${users.length ? ` (${users.length})` : ''}`} />
         <Tab label={`이미지 관리${images.length ? ` (${images.length})` : ''}`} />
+        <Tab label="시스템 설정" icon={<SettingsIcon fontSize="small" />} iconPosition="start" />
       </Tabs>
 
       {loading ? (
@@ -478,6 +528,87 @@ const AdminPage = () => {
                 ))}
               </ImageList>
             )
+          )}
+
+          {/* ─────────────────── 시스템 설정 탭 ─────────────────── */}
+          {tab === 4 && (
+            <Paper elevation={2} sx={{ p: 4, borderRadius: 2, maxWidth: 520 }}>
+              <Typography variant="h6" fontWeight="bold" mb={0.5}>업로드 제한 설정</Typography>
+              <Typography variant="body2" color="text.secondary" mb={3}>
+                0 입력 시 무제한으로 설정됩니다 (이미지 제한 최소 1).
+              </Typography>
+
+              {settingsErrors.server && (
+                <Alert severity="error" sx={{ mb: 2 }}>{settingsErrors.server}</Alert>
+              )}
+              {settingsSaved && (
+                <Alert severity="success" sx={{ mb: 2 }}>설정이 저장되었습니다.</Alert>
+              )}
+
+              <Stack spacing={3}>
+                <Box>
+                  <Typography variant="subtitle2" fontWeight="bold" mb={1} color="primary.main">
+                    여행 관리
+                  </Typography>
+                  <TextField
+                    label="사용자당 최대 여행 수"
+                    type="number"
+                    inputProps={{ min: 0 }}
+                    size="small"
+                    fullWidth
+                    value={settings.maxTripsPerUser}
+                    onChange={handleSettingsChange('maxTripsPerUser')}
+                    error={!!settingsErrors.maxTripsPerUser}
+                    helperText={settingsErrors.maxTripsPerUser || '0 = 무제한'}
+                  />
+                </Box>
+
+                <Box>
+                  <Typography variant="subtitle2" fontWeight="bold" mb={1} color="primary.main">
+                    장소 관리
+                  </Typography>
+                  <TextField
+                    label="하루당 최대 장소 수"
+                    type="number"
+                    inputProps={{ min: 0 }}
+                    size="small"
+                    fullWidth
+                    value={settings.maxLocationsPerDay}
+                    onChange={handleSettingsChange('maxLocationsPerDay')}
+                    error={!!settingsErrors.maxLocationsPerDay}
+                    helperText={settingsErrors.maxLocationsPerDay || '0 = 무제한'}
+                  />
+                </Box>
+
+                <Box>
+                  <Typography variant="subtitle2" fontWeight="bold" mb={1} color="primary.main">
+                    이미지 관리
+                  </Typography>
+                  <TextField
+                    label="여행당 최대 이미지 수"
+                    type="number"
+                    inputProps={{ min: 1 }}
+                    size="small"
+                    fullWidth
+                    value={settings.maxImagesPerTrip}
+                    onChange={handleSettingsChange('maxImagesPerTrip')}
+                    error={!!settingsErrors.maxImagesPerTrip}
+                    helperText={settingsErrors.maxImagesPerTrip || '최소 1 이상'}
+                  />
+                </Box>
+
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <Button
+                    variant="contained"
+                    startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
+                    onClick={handleSettingsSave}
+                    disabled={saving}
+                  >
+                    저장
+                  </Button>
+                </Box>
+              </Stack>
+            </Paper>
           )}
         </>
       )}

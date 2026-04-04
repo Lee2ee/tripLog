@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/trips")
@@ -43,14 +44,14 @@ public class TripController {
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<TripResponse>> getTripById(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.success(tripService.getTripById(id, userDetails.getUsername())));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteTrip(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @AuthenticationPrincipal UserDetails userDetails) {
         tripService.deleteTrip(id, userDetails.getUsername());
         return ResponseEntity.ok(ApiResponse.success("Trip deleted successfully", null));
@@ -64,7 +65,7 @@ public class TripController {
     }
 
     @GetMapping("/public/{id}")
-    public ResponseEntity<ApiResponse<TripResponse>> getPublicTripById(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<TripResponse>> getPublicTripById(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(tripService.getPublicTripById(id)));
     }
 
@@ -72,7 +73,7 @@ public class TripController {
 
     @PatchMapping("/{id}/visibility")
     public ResponseEntity<ApiResponse<TripResponse>> updateVisibility(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @RequestBody Map<String, Boolean> body,
             @AuthenticationPrincipal UserDetails userDetails) {
         Boolean isPublic = body.get("isPublic");
@@ -87,14 +88,14 @@ public class TripController {
 
     @GetMapping("/{id}/members")
     public ResponseEntity<ApiResponse<List<TripMemberResponse>>> getMembers(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.success(tripService.getMembers(id, userDetails.getUsername())));
     }
 
     @PostMapping("/{id}/members")
     public ResponseEntity<ApiResponse<TripMemberResponse>> inviteMember(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @RequestBody Map<String, Object> body,
             @AuthenticationPrincipal UserDetails userDetails) {
         Object userIdObj = body.get("userId");
@@ -110,7 +111,7 @@ public class TripController {
 
     @DeleteMapping("/{id}/members/{memberId}")
     public ResponseEntity<ApiResponse<Void>> removeMember(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @PathVariable Long memberId,
             @AuthenticationPrincipal UserDetails userDetails) {
         tripService.removeMember(id, memberId, userDetails.getUsername());
@@ -119,7 +120,7 @@ public class TripController {
 
     @DeleteMapping("/{id}/leave")
     public ResponseEntity<ApiResponse<Void>> leaveTrip(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @AuthenticationPrincipal UserDetails userDetails) {
         tripService.leaveTrip(id, userDetails.getUsername());
         return ResponseEntity.ok(ApiResponse.success("여행에서 나갔습니다.", null));

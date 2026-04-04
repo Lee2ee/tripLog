@@ -2,9 +2,11 @@ package com.triplog.controller;
 
 import com.triplog.dto.request.AdminCreateTripRequest;
 import com.triplog.dto.request.AdminUpdateUserRequest;
+import com.triplog.dto.request.AppSettingsRequest;
 import com.triplog.dto.request.TripRequest;
 import com.triplog.dto.response.*;
 import com.triplog.service.AdminService;
+import com.triplog.service.SettingsService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -22,6 +25,7 @@ import java.util.Map;
 public class AdminController {
 
     private final AdminService adminService;
+    private final SettingsService settingsService;
 
     // ── 대시보드 통계 ──────────────────────────────────────────────────
 
@@ -70,7 +74,7 @@ public class AdminController {
     }
 
     @GetMapping("/trips/{tripId}")
-    public ResponseEntity<ApiResponse<TripResponse>> getTripById(@PathVariable Long tripId) {
+    public ResponseEntity<ApiResponse<TripResponse>> getTripById(@PathVariable UUID tripId) {
         return ResponseEntity.ok(ApiResponse.success(adminService.getTripById(tripId)));
     }
 
@@ -84,15 +88,28 @@ public class AdminController {
 
     @PutMapping("/trips/{tripId}")
     public ResponseEntity<ApiResponse<TripResponse>> updateTrip(
-            @PathVariable Long tripId,
+            @PathVariable UUID tripId,
             @Valid @RequestBody TripRequest request) {
         return ResponseEntity.ok(ApiResponse.success(adminService.updateTrip(tripId, request)));
     }
 
     @DeleteMapping("/trips/{tripId}")
-    public ResponseEntity<ApiResponse<Void>> deleteTrip(@PathVariable Long tripId) {
+    public ResponseEntity<ApiResponse<Void>> deleteTrip(@PathVariable UUID tripId) {
         adminService.deleteTrip(tripId);
         return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    // ── 시스템 설정 ────────────────────────────────────────────────────
+
+    @GetMapping("/settings")
+    public ResponseEntity<ApiResponse<AppSettingsResponse>> getSettings() {
+        return ResponseEntity.ok(ApiResponse.success(settingsService.getSettings()));
+    }
+
+    @PutMapping("/settings")
+    public ResponseEntity<ApiResponse<AppSettingsResponse>> updateSettings(
+            @Valid @RequestBody AppSettingsRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(settingsService.updateSettings(request)));
     }
 
     // ── 이미지 관리 ────────────────────────────────────────────────────

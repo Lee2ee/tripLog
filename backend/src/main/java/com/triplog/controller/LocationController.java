@@ -14,6 +14,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
@@ -23,7 +24,7 @@ public class LocationController {
 
     @PostMapping("/api/trips/{tripId}/days/{dayId}/locations")
     public ResponseEntity<ApiResponse<LocationResponse>> addLocation(
-            @PathVariable Long tripId,
+            @PathVariable UUID tripId,
             @PathVariable Long dayId,
             @Valid @RequestBody LocationRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -43,7 +44,7 @@ public class LocationController {
 
     @PatchMapping("/api/trips/{tripId}/days/{dayId}/locations/reorder")
     public ResponseEntity<ApiResponse<List<LocationResponse>>> reorderLocations(
-            @PathVariable Long tripId,
+            @PathVariable UUID tripId,
             @PathVariable Long dayId,
             @RequestBody LocationReorderRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {

@@ -21,6 +21,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -180,7 +181,7 @@ public class AdminService {
     }
 
     @Transactional(readOnly = true)
-    public TripResponse getTripById(Long tripId) {
+    public TripResponse getTripById(UUID tripId) {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> CustomException.notFound("Trip not found: " + tripId));
         return mapToTripFull(trip);
@@ -216,7 +217,7 @@ public class AdminService {
     }
 
     @Transactional
-    public TripResponse updateTrip(Long tripId, TripRequest request) {
+    public TripResponse updateTrip(UUID tripId, TripRequest request) {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> CustomException.notFound("Trip not found: " + tripId));
 
@@ -230,7 +231,7 @@ public class AdminService {
     }
 
     @Transactional
-    public void deleteTrip(Long tripId) {
+    public void deleteTrip(UUID tripId) {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> CustomException.notFound("Trip not found: " + tripId));
         tripRepository.delete(trip);

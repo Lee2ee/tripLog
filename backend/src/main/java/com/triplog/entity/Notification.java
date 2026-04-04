@@ -5,6 +5,7 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "notifications")
@@ -26,7 +27,8 @@ public class Notification {
     @Column(nullable = false)
     private String message;
 
-    private Long tripId;
+    @Column(columnDefinition = "VARCHAR(36)")
+    private UUID tripId;
 
     @Column(nullable = false)
     @Builder.Default
