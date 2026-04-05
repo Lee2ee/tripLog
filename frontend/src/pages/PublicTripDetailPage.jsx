@@ -56,13 +56,15 @@ const PublicTripDetailPage = () => {
   }, [id, fetchLikeStatus]);
 
   const handleLikeToggle = async () => {
-    if (!isAuthenticated()) { setSnackbar('좋아요를 누르려면 로그인이 필요합니다.'); return; }
     setLikeLoading(true);
     try {
       const res = await axiosInstance.post(`/trips/${id}/like`);
       setLikeStatus(res.data.data);
-    } catch { setSnackbar('오류가 발생했습니다.'); }
-    finally { setLikeLoading(false); }
+    } catch {
+      setSnackbar('오류가 발생했습니다.');
+    } finally {
+      setLikeLoading(false);
+    }
   };
 
   const formatDate = (dateStr) => {
@@ -132,7 +134,7 @@ const PublicTripDetailPage = () => {
               <IconButton
                 size="small"
                 color={likeStatus.liked ? 'error' : 'default'}
-                onClick={handleLikeToggle}
+                onClick={isAuthenticated() ? handleLikeToggle : () => setSnackbar('로그인 후 좋아요를 누를 수 있습니다.')}
                 disabled={likeLoading}
               >
                 {likeStatus.liked ? <FavoriteIcon /> : <FavoriteBorderIcon />}
