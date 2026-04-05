@@ -13,6 +13,8 @@ import LoginIcon from '@mui/icons-material/Login';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import PublicIcon from '@mui/icons-material/Public';
 import NotificationsIcon from '@mui/icons-material/Notifications';
+import BookmarkIcon from '@mui/icons-material/Bookmark';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -128,6 +130,16 @@ const Navbar = () => {
             >
               갤러리
             </Button>
+            {!admin && (
+              <Button
+                color="inherit"
+                startIcon={<BookmarkIcon />}
+                onClick={() => navigate('/wishlist')}
+                sx={navBtnStyle('/wishlist')}
+              >
+                위시리스트
+              </Button>
+            )}
             {admin && (
               <Button
                 color="inherit"
@@ -147,12 +159,27 @@ const Navbar = () => {
 
         {authenticated ? (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
-            <Typography
-              variant="body2"
-              sx={{ opacity: 0.9, whiteSpace: 'nowrap', display: { xs: 'none', sm: 'block' } }}
-            >
-              {user?.nickname}
-            </Typography>
+            {!admin && (
+              <Tooltip title="내 프로필">
+                <Button
+                  color="inherit"
+                  startIcon={<AccountCircleIcon />}
+                  onClick={() => navigate('/profile')}
+                  size="small"
+                  sx={{ whiteSpace: 'nowrap', display: { xs: 'none', sm: 'flex' } }}
+                >
+                  {user?.nickname}
+                </Button>
+              </Tooltip>
+            )}
+            {admin && (
+              <Typography
+                variant="body2"
+                sx={{ opacity: 0.9, whiteSpace: 'nowrap', display: { xs: 'none', sm: 'block' } }}
+              >
+                {user?.nickname}
+              </Typography>
+            )}
             {!admin && (
               <Tooltip title="알림">
                 <IconButton color="inherit" onClick={handleOpenNotif} size="small">

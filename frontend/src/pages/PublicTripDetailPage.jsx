@@ -6,7 +6,7 @@ import {
 } from '@mui/material';
 import { useParams, Link as RouterLink, Navigate } from 'react-router-dom';
 import axiosInstance from '../api/axios';
-import { getUser } from '../store/authStore';
+import { getUser, isAuthenticated } from '../store/authStore';
 import TripMap from '../components/Map/TripMap';
 import PublicIcon from '@mui/icons-material/Public';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
@@ -14,6 +14,8 @@ import LocationOnIcon from '@mui/icons-material/LocationOn';
 import PersonIcon from '@mui/icons-material/Person';
 import PeopleIcon from '@mui/icons-material/People';
 import ShareIcon from '@mui/icons-material/Share';
+import FavoriteIcon from '@mui/icons-material/Favorite';
+import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 
 const PublicTripDetailPage = () => {
   const { id } = useParams();
@@ -22,6 +24,15 @@ const PublicTripDetailPage = () => {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState(0);
   const [snackbar, setSnackbar] = useState('');
+  const [likeStatus, setLikeStatus] = useState({ liked: false, likeCount: 0 });
+  const [likeLoading, setLikeLoading] = useState(false);
+
+  const fetchLikeStatus = useCallback(async (tripId) => {
+    try {
+      const res = await axiosInstance.get(`/trips/${tripId}/like`);
+      setLikeStatus(res.data.data);
+    } catch { /* 무시 */ }
+  }, []);
 
   const fetchTrip = useCallback(async () => {
     try {
@@ -36,7 +47,23 @@ const PublicTripDetailPage = () => {
     }
   }, [id]);
 
-  useEffect(() => { fetchTrip(); }, [fetchTrip]);
+  useEffect(() => {
+    fetchTrip();
+  }, [fetchTrip]);
+
+  useEffect(() => {
+    if (id) fetchLikeStatus(id);
+  }, [id, fetchLikeStatus]);
+
+  const handleLikeToggle = async () => {
+    if (!isAuthenticated()) { setSnackbar('좋아요를 누르려면 로그인이 필요합니다.'); return; }
+    setLikeLoading(true);
+    try {
+      const res = await axiosInstance.post(`/trips/${id}/like`);
+      setLikeStatus(res.data.data);
+    } catch { setSnackbar('오류가 발생했습니다.'); }
+    finally { setLikeLoading(false); }
+  };
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -99,14 +126,29 @@ const PublicTripDetailPage = () => {
             </Box>
           )}
         </Box>
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<ShareIcon />}
-          onClick={() => navigator.clipboard.writeText(window.location.href).then(() => setSnackbar('링크가 복사되었습니다.'))}
-        >
-          공유
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          <Tooltip title={isAuthenticated() ? (likeStatus.liked ? '좋아요 취소' : '좋아요') : '로그인 후 좋아요 가능'}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <IconButton
+                size="small"
+                color={likeStatus.liked ? 'error' : 'default'}
+                onClick={handleLikeToggle}
+                disabled={likeLoading}
+              >
+                {likeStatus.liked ? <FavoriteIcon /> : <FavoriteBorderIcon />}
+              </IconButton>
+              <Typography variant="body2" color="text.secondary">{likeStatus.likeCount}</Typography>
+            </Box>
+          </Tooltip>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<ShareIcon />}
+            onClick={() => navigator.clipboard.writeText(window.location.href).then(() => setSnackbar('링크가 복사되었습니다.'))}
+          >
+            공유
+          </Button>
+        </Box>
       </Box>
 
       {/* 일자 탭 */}
@@ -190,7 +232,7 @@ const PublicTripDetailPage = () => {
               {/* 우측: 지도 */}
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="subtitle1" fontWeight="bold" gutterBottom>경로 지도</Typography>
-                <TripMap key={activeDay.id} locations={activeDay.locations || []} />
+                <TripMap key={activeDay.id} locations={activeDay.locations || []} readOnly />
               </Box>
             </Box>
           )}

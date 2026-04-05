@@ -10,4 +10,5 @@ public class AppSettingsResponse {
     private int maxTripsPerUser;
     private int maxLocationsPerDay;
     private int maxImagesPerTrip;
+    private int mapsMonthlyLimit;
 }

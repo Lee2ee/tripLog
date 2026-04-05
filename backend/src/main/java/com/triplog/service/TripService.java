@@ -34,6 +34,7 @@ public class TripService {
     private final TripImageRepository tripImageRepository;
     private final UserRepository userRepository;
     private final NotificationRepository notificationRepository;
+    private final TripLikeRepository tripLikeRepository;
     @Lazy private final SettingsService settingsService;
 
     // ── 여행 CRUD ──────────────────────────────────────────────────────
@@ -348,6 +349,7 @@ public class TripService {
                 .ownerId(trip.getUser().getId())
                 .ownerNickname(trip.getUser().getNickname())
                 .memberCount(trip.getMembers().size())
+                .likeCount(tripLikeRepository.countByTripId(trip.getId()))
                 .tripDays(List.of())
                 .images(List.of())
                 .build();

@@ -353,27 +353,30 @@ const SortableLocationItem = ({ loc, index, dayId, onDelete, onEdit, deleteLoadi
         </Box>
       )}
 
-      <ListItem ref={setNodeRef} style={style} sx={{ px: 2 }}>
+      <ListItem ref={setNodeRef} style={style} sx={{ px: 2, alignItems: 'flex-start', gap: 0.5 }}>
         {/* 드래그 핸들 */}
         {canEdit && (
           <Box
             {...attributes}
             {...listeners}
-            sx={{ cursor: 'grab', color: 'grey.400', mr: 0.5, display: 'flex', alignItems: 'center', '&:active': { cursor: 'grabbing' } }}
+            sx={{ cursor: 'grab', color: 'grey.400', display: 'flex', alignItems: 'center', flexShrink: 0, pt: 0.5, '&:active': { cursor: 'grabbing' } }}
           >
             <DragIndicatorIcon fontSize="small" />
           </Box>
         )}
 
-        <Box sx={{ width: 26, height: 26, borderRadius: '50%', bgcolor: 'primary.main', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 'bold', mr: 1.5, flexShrink: 0 }}>
+        <Box sx={{ width: 26, height: 26, borderRadius: '50%', bgcolor: 'primary.main', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 'bold', flexShrink: 0, mt: 0.25 }}>
           {index + 1}
         </Box>
+
+        {/* 텍스트 영역 — minWidth: 0 으로 flex 축소 허용 */}
         <ListItemText
+          sx={{ minWidth: 0, mx: 1 }}
           primary={
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-              <span>{loc.name}</span>
+              <span style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{loc.name}</span>
               {loc.category && (
-                <Chip label={loc.category} size="small" variant="outlined" sx={{ height: 18, fontSize: '0.7rem' }} />
+                <Chip label={loc.category} size="small" variant="outlined" sx={{ height: 18, fontSize: '0.7rem', flexShrink: 0 }} />
               )}
             </Box>
           }
@@ -383,16 +386,18 @@ const SortableLocationItem = ({ loc, index, dayId, onDelete, onEdit, deleteLoadi
                 {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}
               </Box>
               {loc.memo && (
-                <Box component="span" sx={{ display: 'block', fontSize: '0.75rem', color: 'text.secondary', fontStyle: 'italic', mt: 0.25 }}>
+                <Box component="span" sx={{ display: 'block', fontSize: '0.75rem', color: 'text.secondary', fontStyle: 'italic', mt: 0.25, wordBreak: 'break-word' }}>
                   {loc.memo}
                 </Box>
               )}
             </Box>
           }
-          primaryTypographyProps={{ fontWeight: 'medium', sx: { wordBreak: 'keep-all' } }}
+          primaryTypographyProps={{ fontWeight: 'medium' }}
           secondaryTypographyProps={{ component: 'span' }}
         />
-        <ListItemSecondaryAction sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+
+        {/* 액션 버튼 — absolute 대신 flex item으로 배치 */}
+        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexShrink: 0, ml: 'auto' }}>
           <Tooltip title="장소 사진">
             <IconButton size="small" onClick={() => onSelectLoc(loc.id)}
               color={isPhotoOpen ? 'primary' : 'default'}>
@@ -417,7 +422,7 @@ const SortableLocationItem = ({ loc, index, dayId, onDelete, onEdit, deleteLoadi
               </Tooltip>
             </>
           )}
-        </ListItemSecondaryAction>
+        </Box>
       </ListItem>
 
     </>

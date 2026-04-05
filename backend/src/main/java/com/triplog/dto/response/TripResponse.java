@@ -36,4 +36,5 @@ public class TripResponse {
     private Boolean isOwner;
     private int memberCount;
     private List<TripMemberResponse> members;
+    private long likeCount;
 }

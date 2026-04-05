@@ -14,6 +14,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import PeopleIcon from '@mui/icons-material/People';
 import SearchIcon from '@mui/icons-material/Search';
 import ShareIcon from '@mui/icons-material/Share';
+import FavoriteIcon from '@mui/icons-material/Favorite';
 
 const PublicTripsPage = () => {
   const navigate = useNavigate();
@@ -201,14 +202,22 @@ const PublicTripsPage = () => {
                             {trip.ownerNickname}
                           </Typography>
                         </Box>
-                        {trip.memberCount > 0 && (
-                          <Chip
-                            icon={<PeopleIcon />}
-                            label={`${trip.memberCount + 1}명`}
-                            size="small"
-                            variant="outlined"
-                          />
-                        )}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {trip.memberCount > 0 && (
+                            <Chip
+                              icon={<PeopleIcon />}
+                              label={`${trip.memberCount + 1}명`}
+                              size="small"
+                              variant="outlined"
+                            />
+                          )}
+                          {trip.likeCount > 0 && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, color: 'error.light' }}>
+                              <FavoriteIcon sx={{ fontSize: 14 }} />
+                              <Typography variant="caption">{trip.likeCount}</Typography>
+                            </Box>
+                          )}
+                        </Box>
                       </Box>
                     </CardContent>
                   </CardActionArea>

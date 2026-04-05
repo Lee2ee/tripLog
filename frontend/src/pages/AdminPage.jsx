@@ -6,7 +6,7 @@ import {
   DialogActions, Select, MenuItem, FormControl, InputLabel,
   Alert, CircularProgress, ImageList, ImageListItem, ImageListItemBar,
   TextField, Divider, Tooltip, Stack, Grid, Card, CardContent,
-  InputAdornment,
+  InputAdornment, LinearProgress,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
@@ -19,6 +19,10 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SaveIcon from '@mui/icons-material/Save';
 import SearchIcon from '@mui/icons-material/Search';
+import MapIcon from '@mui/icons-material/Map';
+import RouteIcon from '@mui/icons-material/Route';
+import PlaceIcon from '@mui/icons-material/Place';
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip as RTooltip, Legend, ResponsiveContainer,
@@ -29,7 +33,7 @@ import api from '../api/axios';
 const EMPTY_CONFIRM = { open: false, action: null, label: '' };
 const EMPTY_USER_EDIT = { open: false, user: null, email: '', nickname: '', role: '', newPassword: '', errors: {} };
 const EMPTY_TRIP_DIALOG = { open: false, mode: 'create', trip: null, userId: '', title: '', startDate: '', endDate: '', errors: {} };
-const EMPTY_SETTINGS = { maxTripsPerUser: 100, maxLocationsPerDay: 20, maxImagesPerTrip: 50 };
+const EMPTY_SETTINGS = { maxTripsPerUser: 100, maxLocationsPerDay: 20, maxImagesPerTrip: 50, mapsMonthlyLimit: 1000 };
 
 /* ── 통계 카드 컴포넌트 ──────────────────────────────── */
 const StatCard = ({ icon, label, value, color }) => (
@@ -50,6 +54,11 @@ const StatCard = ({ icon, label, value, color }) => (
 const AdminPage = () => {
   const [tab, setTab] = useState(0);
   const [stats, setStats] = useState(null);
+  const [mapsUsage, setMapsUsage] = useState(null);
+  const [mapsMonth, setMapsMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
   const [users, setUsers] = useState([]);
   const [trips, setTrips] = useState([]);
   const [images, setImages] = useState([]);
@@ -69,11 +78,26 @@ const AdminPage = () => {
   const [confirmDialog, setConfirmDialog] = useState(EMPTY_CONFIRM);
 
   /* ── 데이터 fetch ──────────────────────────────────── */
+  const fetchMapsUsage = useCallback(async (yearMonth) => {
+    const [y, m] = yearMonth.split('-');
+    try {
+      const res = await api.get(`/admin/maps-usage/stats?year=${y}&month=${m}`);
+      setMapsUsage(res.data.data);
+    } catch { /* 대시보드 통계와 별도로 조용히 실패 */ }
+  }, []);
+
   const fetchStats = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get('/admin/stats');
-      setStats(res.data.data);
+      const now = new Date();
+      const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const [statsRes, mapsRes] = await Promise.all([
+        api.get('/admin/stats'),
+        api.get(`/admin/maps-usage/stats?year=${now.getFullYear()}&month=${now.getMonth() + 1}`),
+      ]);
+      setStats(statsRes.data.data);
+      setMapsUsage(mapsRes.data.data);
+      setMapsMonth(ym);
     } catch { setError('통계를 불러오지 못했습니다.'); }
     finally { setLoading(false); }
   }, []);
@@ -238,6 +262,8 @@ const AdminPage = () => {
       errs.maxLocationsPerDay = '0 이상 숫자를 입력하세요 (0 = 무제한)';
     if (!settings.maxImagesPerTrip || settings.maxImagesPerTrip < 1)
       errs.maxImagesPerTrip = '1 이상 숫자를 입력하세요';
+    if (settings.mapsMonthlyLimit === '' || settings.mapsMonthlyLimit < 0)
+      errs.mapsMonthlyLimit = '0 이상 숫자를 입력하세요';
     return errs;
   };
 
@@ -405,6 +431,123 @@ const AdminPage = () => {
                   </Table>
                 </TableContainer>
               </Paper>
+
+              {/* Google Maps API 사용량 */}
+              {mapsUsage && (() => {
+                const monthTotal = mapsUsage.monthDirections + mapsUsage.monthPlaces + mapsUsage.monthMapLoads;
+                const usagePct   = mapsUsage.monthlyLimit > 0
+                  ? Math.min(100, (monthTotal / mapsUsage.monthlyLimit) * 100) : 0;
+                const barColor   = mapsUsage.remainingCalls === 0 ? 'error'
+                  : usagePct >= 80 ? 'warning' : 'primary';
+
+                // 월 선택 옵션 (최근 6개월)
+                const monthOptions = Array.from({ length: 6 }, (_, i) => {
+                  const d = new Date();
+                  d.setDate(1);
+                  d.setMonth(d.getMonth() - i);
+                  const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                  return { value: val, label: `${d.getFullYear()}년 ${d.getMonth() + 1}월` };
+                });
+
+                return (
+                  <Box mt={4}>
+                    {/* 헤더 + 월 선택기 */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <MapIcon color="primary" />
+                        <Typography variant="h6" fontWeight="bold">
+                          Google Maps API 사용량
+                        </Typography>
+                        <Chip label={mapsUsage.periodLabel} size="small" color="primary" variant="outlined" />
+                      </Box>
+                      <FormControl size="small" sx={{ minWidth: 150 }}>
+                        <Select
+                          value={mapsMonth}
+                          onChange={(e) => {
+                            setMapsMonth(e.target.value);
+                            fetchMapsUsage(e.target.value);
+                          }}
+                        >
+                          {monthOptions.map((o) => (
+                            <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Box>
+
+                    {/* 요약 카드 4개 */}
+                    <Grid container spacing={2} mb={3}>
+                      {[
+                        { icon: <RouteIcon />,      label: '오늘 경로 요청',   value: mapsUsage.todayDirections, color: '#1976d2' },
+                        { icon: <PlaceIcon />,       label: '오늘 장소 검색',   value: mapsUsage.todayPlaces,     color: '#388e3c' },
+                        { icon: <MapIcon />,         label: '오늘 지도 로드',   value: mapsUsage.todayMapLoads,   color: '#7b1fa2' },
+                        { icon: <AttachMoneyIcon />, label: '예상 청구 비용',
+                          value: mapsUsage.rawCostUsd <= 200
+                            ? `$0 (크레딧 내)`
+                            : `$${mapsUsage.estimatedCostUsd}`,
+                          color: mapsUsage.estimatedCostUsd > 0 ? '#d32f2f' : '#388e3c' },
+                      ].map((s) => (
+                        <Grid item xs={12} sm={6} md={3} key={s.label}>
+                          <StatCard {...s} />
+                        </Grid>
+                      ))}
+                    </Grid>
+
+                    {/* 월간 한도 진행바 */}
+                    <Paper elevation={2} sx={{ p: 3, borderRadius: 2, mb: 3 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, flexWrap: 'wrap', gap: 1 }}>
+                        <Typography variant="subtitle2" fontWeight="bold">
+                          {mapsUsage.periodLabel} 총 호출 / 설정 한도
+                        </Typography>
+                        {mapsUsage.monthlyLimit > 0 ? (
+                          <Typography variant="subtitle2" fontWeight="bold"
+                            color={barColor === 'error' ? 'error.main' : barColor === 'warning' ? 'warning.main' : 'success.main'}>
+                            {monthTotal} / {mapsUsage.monthlyLimit}회
+                            &nbsp;(잔여 {mapsUsage.remainingCalls}회)
+                          </Typography>
+                        ) : (
+                          <Typography variant="subtitle2" color="text.secondary">총 {monthTotal}회 (한도 없음)</Typography>
+                        )}
+                      </Box>
+                      {mapsUsage.monthlyLimit > 0 && (
+                        <LinearProgress
+                          variant="determinate"
+                          value={usagePct}
+                          color={barColor}
+                          sx={{ height: 10, borderRadius: 5 }}
+                        />
+                      )}
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.75, flexWrap: 'wrap', gap: 0.5 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          경로 {mapsUsage.monthDirections}회 · 장소 {mapsUsage.monthPlaces}회 · 지도 {mapsUsage.monthMapLoads}회
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          원가 ${mapsUsage.rawCostUsd} → $200 크레딧 적용 후 ${ mapsUsage.estimatedCostUsd}
+                        </Typography>
+                      </Box>
+                    </Paper>
+
+                    {/* 7일 일별 차트 */}
+                    <Paper elevation={2} sx={{ p: 3, borderRadius: 2 }}>
+                      <Typography variant="subtitle1" fontWeight="bold" mb={2}>
+                        최근 7일 API 호출 추이
+                      </Typography>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={mapsUsage.dailyChart} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                          <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                          <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                          <RTooltip />
+                          <Legend />
+                          <Bar dataKey="directions" name="경로(Directions)" fill="#1976d2" radius={[3, 3, 0, 0]} stackId="a" />
+                          <Bar dataKey="places"     name="장소(Places)"    fill="#388e3c" radius={[0, 0, 0, 0]} stackId="a" />
+                          <Bar dataKey="mapLoads"   name="지도 로드"        fill="#7b1fa2" radius={[3, 3, 0, 0]} stackId="a" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </Paper>
+                  </Box>
+                );
+              })()}
             </Box>
           )}
 
@@ -655,6 +798,22 @@ const AdminPage = () => {
                     onChange={handleSettingsChange('maxImagesPerTrip')}
                     error={!!settingsErrors.maxImagesPerTrip}
                     helperText={settingsErrors.maxImagesPerTrip || '최소 1 이상'}
+                  />
+                </Box>
+
+                <Box>
+                  <Typography variant="subtitle2" fontWeight="bold" mb={1} color="primary.main">
+                    Google Maps API
+                  </Typography>
+                  <TextField
+                    label="월간 API 호출 한도"
+                    type="number"
+                    inputProps={{ min: 0 }}
+                    size="small"
+                    fullWidth
+                    value={settings.mapsMonthlyLimit ?? 1000}
+                    onChange={handleSettingsChange('mapsMonthlyLimit')}
+                    helperText="대시보드 잔여 호출 계산에 사용 (0 = 한도 없음)"
                   />
                 </Box>
 

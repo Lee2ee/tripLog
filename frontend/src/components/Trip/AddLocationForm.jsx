@@ -4,6 +4,7 @@ import {
   Alert, Divider, MenuItem, Chip, ToggleButtonGroup, ToggleButton, Tooltip,
 } from '@mui/material';
 import { Autocomplete, useJsApiLoader } from '@react-google-maps/api';
+import { trackApiCall } from '../../utils/mapsUsageTracker';
 import AddLocationAltIcon from '@mui/icons-material/AddLocationAlt';
 import SearchIcon from '@mui/icons-material/Search';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
@@ -62,6 +63,7 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
     setName(place.name || '');
     setPinError('');
     setNameError('');
+    trackApiCall('PLACES', 1);
   }, []);
 
   const handleSubmit = async (e) => {

@@ -18,6 +18,7 @@ public class SettingsService {
     static final String KEY_MAX_TRIPS_PER_USER = "MAX_TRIPS_PER_USER";
     static final String KEY_MAX_LOCATIONS_PER_DAY = "MAX_LOCATIONS_PER_DAY";
     static final String KEY_MAX_IMAGES_PER_TRIP = "MAX_IMAGES_PER_TRIP";
+    static final String KEY_MAPS_MONTHLY_LIMIT = "MAPS_MONTHLY_LIMIT";
 
     private final AppSettingsRepository settingsRepository;
 
@@ -27,6 +28,7 @@ public class SettingsService {
         seedIfAbsent(KEY_MAX_TRIPS_PER_USER, "100");
         seedIfAbsent(KEY_MAX_LOCATIONS_PER_DAY, "20");
         seedIfAbsent(KEY_MAX_IMAGES_PER_TRIP, "50");
+        seedIfAbsent(KEY_MAPS_MONTHLY_LIMIT, "1000");
         log.info("App settings initialized");
     }
 
@@ -36,6 +38,7 @@ public class SettingsService {
                 .maxTripsPerUser(getInt(KEY_MAX_TRIPS_PER_USER, 100))
                 .maxLocationsPerDay(getInt(KEY_MAX_LOCATIONS_PER_DAY, 20))
                 .maxImagesPerTrip(getInt(KEY_MAX_IMAGES_PER_TRIP, 50))
+                .mapsMonthlyLimit(getInt(KEY_MAPS_MONTHLY_LIMIT, 1000))
                 .build();
     }
 
@@ -44,8 +47,10 @@ public class SettingsService {
         set(KEY_MAX_TRIPS_PER_USER, request.getMaxTripsPerUser());
         set(KEY_MAX_LOCATIONS_PER_DAY, request.getMaxLocationsPerDay());
         set(KEY_MAX_IMAGES_PER_TRIP, request.getMaxImagesPerTrip());
-        log.info("App settings updated: maxTrips={}, maxLocations={}, maxImages={}",
-                request.getMaxTripsPerUser(), request.getMaxLocationsPerDay(), request.getMaxImagesPerTrip());
+        set(KEY_MAPS_MONTHLY_LIMIT, request.getMapsMonthlyLimit());
+        log.info("App settings updated: maxTrips={}, maxLocations={}, maxImages={}, mapsLimit={}",
+                request.getMaxTripsPerUser(), request.getMaxLocationsPerDay(),
+                request.getMaxImagesPerTrip(), request.getMapsMonthlyLimit());
         return getSettings();
     }
 
@@ -59,6 +64,10 @@ public class SettingsService {
 
     public int getMaxImagesPerTrip() {
         return getInt(KEY_MAX_IMAGES_PER_TRIP, 50);
+    }
+
+    public int getMapsMonthlyLimit() {
+        return getInt(KEY_MAPS_MONTHLY_LIMIT, 1000);
     }
 
     private int getInt(String key, int defaultValue) {

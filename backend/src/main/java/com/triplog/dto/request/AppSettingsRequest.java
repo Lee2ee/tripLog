@@ -15,4 +15,7 @@ public class AppSettingsRequest {
 
     @Min(1)
     private int maxImagesPerTrip;
+
+    @Min(0)
+    private int mapsMonthlyLimit;
 }
