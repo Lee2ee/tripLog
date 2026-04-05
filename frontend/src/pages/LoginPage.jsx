@@ -10,7 +10,8 @@ const LoginPage = () => {
   const oauthErrorCode = params.get('code');
 
   const handleKakaoLogin = () => {
-    window.location.href = '/oauth2/authorization/kakao';
+    const base = import.meta.env.VITE_API_URL || '';
+    window.location.href = `${base}/oauth2/authorization/kakao`;
   };
 
   return (

@@ -9,17 +9,11 @@ import com.triplog.repository.TripRepository;
 import com.triplog.util.UploadRateLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -32,10 +26,8 @@ public class ImageService {
     private final TripImageRepository tripImageRepository;
     private final TripRepository tripRepository;
     private final UploadRateLimiter uploadRateLimiter;
+    private final StorageService storageService;
     @Lazy private final SettingsService settingsService;
-
-    @Value("${file.upload-dir}")
-    private String uploadDir;
 
     @Transactional
     public ImageResponse saveImage(UUID tripId, MultipartFile file, String email) {
@@ -56,48 +48,17 @@ public class ImageService {
             throw CustomException.badRequest("여행당 최대 " + maxImages + "장까지 업로드할 수 있습니다.");
         }
 
-        if (file == null || file.isEmpty()) {
-            throw CustomException.badRequest("File is required");
-        }
+        String imageUrl = storageService.upload(file, "trips/" + tripId);
 
-        String contentType = file.getContentType();
-        if (contentType == null || !contentType.startsWith("image/")) {
-            throw CustomException.badRequest("Only image files are allowed");
-        }
+        TripImage tripImage = tripImageRepository.save(
+                TripImage.builder().trip(trip).imageUrl(imageUrl).build()
+        );
+        log.info("Trip image uploaded for trip: {}", tripId);
 
-        try {
-            Path uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
-            Files.createDirectories(uploadPath);
-
-            String originalFilename = file.getOriginalFilename();
-            String extension = "";
-            if (originalFilename != null && originalFilename.contains(".")) {
-                extension = originalFilename.substring(originalFilename.lastIndexOf("."));
-            }
-            String filename = UUID.randomUUID() + extension;
-
-            Path targetLocation = uploadPath.resolve(filename);
-            Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
-
-            String imageUrl = "/uploads/" + filename;
-
-            TripImage tripImage = TripImage.builder()
-                    .trip(trip)
-                    .imageUrl(imageUrl)
-                    .build();
-
-            tripImage = tripImageRepository.save(tripImage);
-            log.info("Image saved: {} for trip: {}", filename, tripId);
-
-            return ImageResponse.builder()
-                    .id(tripImage.getId())
-                    .imageUrl(tripImage.getImageUrl())
-                    .build();
-
-        } catch (IOException ex) {
-            log.error("Failed to store image file: {}", ex.getMessage());
-            throw CustomException.badRequest("Failed to store image file: " + ex.getMessage());
-        }
+        return ImageResponse.builder()
+                .id(tripImage.getId())
+                .imageUrl(tripImage.getImageUrl())
+                .build();
     }
 
     @Transactional(readOnly = true)
