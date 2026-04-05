@@ -6,6 +6,10 @@ spring:
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:1234}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      max-lifetime: 540000        # 9분 (TiDB Cloud 10분 타임아웃보다 짧게)
+      connection-timeout: 30000
+      keepalive-time: 300000      # 5분마다 커넥션 유지 확인
   jpa:
     hibernate:
       ddl-auto: update
