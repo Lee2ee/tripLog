@@ -17,6 +17,12 @@ public class AuthController {
 
     private final AuthService authService;
 
+    /** Render 수면 방지용 헬스체크 — UptimeRobot 등에서 주기적으로 호출 */
+    @GetMapping("/health")
+    public ResponseEntity<String> health() {
+        return ResponseEntity.ok("ok");
+    }
+
     @PostMapping("/admin/login")
     public ResponseEntity<ApiResponse<AuthResponse>> adminLogin(
             @Valid @RequestBody LoginRequest request,

@@ -101,6 +101,7 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/auth/health").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/trips/public", "/api/trips/public/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/trips/*/like").permitAll()
