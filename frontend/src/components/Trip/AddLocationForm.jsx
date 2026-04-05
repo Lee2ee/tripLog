@@ -169,6 +169,7 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
                 exclusive
                 onChange={(_, v) => { if (v) setTransportMode(v); }}
                 size="small"
+                sx={{ flexWrap: 'wrap' }}
               >
                 {TRANSPORT_MODES.map((mode) => (
                   <Tooltip key={mode.value} title={mode.label} arrow>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   AppBar, Toolbar, Typography, Button, Box, IconButton,
   Badge, Popover, List, ListItem, ListItemText, Divider, Tooltip,
+  Drawer, ListItemButton, ListItemIcon,
 } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { logout, isAuthenticated, isAdmin, getUser } from '../../store/authStore';
@@ -15,6 +16,8 @@ import PublicIcon from '@mui/icons-material/Public';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import MenuIcon from '@mui/icons-material/Menu';
+import FlightTakeoffIcon from '@mui/icons-material/FlightTakeoff';
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -26,6 +29,7 @@ const Navbar = () => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifAnchor, setNotifAnchor] = useState(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const pollRef = useRef(null);
 
   const fetchUnreadCount = async () => {
@@ -72,6 +76,7 @@ const Navbar = () => {
 
   const handleLogout = () => {
     logout();
+    setDrawerOpen(false);
     navigate(admin ? '/admin/login' : '/login');
   };
 
@@ -85,13 +90,37 @@ const Navbar = () => {
     px: 1.5,
   });
 
+  const navItems = [
+    { label: '탐색', path: '/explore', icon: <PublicIcon /> },
+    ...(authenticated ? [
+      { label: '내 여행', path: '/trips', icon: <FlightTakeoffIcon /> },
+      { label: '갤러리', path: '/gallery', icon: <PhotoLibraryIcon /> },
+      ...(!admin ? [{ label: '위시리스트', path: '/wishlist', icon: <BookmarkIcon /> }] : []),
+      ...(admin ? [{ label: '관리자', path: '/admin', icon: <AdminPanelSettingsIcon /> }] : []),
+    ] : []),
+  ];
+
+  const handleNavDrawer = (path) => {
+    navigate(path);
+    setDrawerOpen(false);
+  };
+
   return (
     <AppBar position="sticky" elevation={2}>
       <Toolbar>
+        {/* 모바일 햄버거 메뉴 */}
+        <IconButton
+          color="inherit"
+          onClick={() => setDrawerOpen(true)}
+          sx={{ mr: 1, display: { md: 'none' } }}
+        >
+          <MenuIcon />
+        </IconButton>
+
         <IconButton
           color="inherit"
           onClick={() => navigate('/')}
-          sx={{ mr: 1 }}
+          sx={{ mr: 1, display: { xs: 'none', md: 'flex' } }}
         >
           <ExploreIcon />
         </IconButton>
@@ -104,59 +133,27 @@ const Navbar = () => {
           TripLog
         </Typography>
 
-        <Box sx={{ display: 'flex', gap: 0.5, flexGrow: 1 }}>
-          <Button
-            color="inherit"
-            startIcon={<PublicIcon />}
-            onClick={() => navigate('/explore')}
-            sx={navBtnStyle('/explore')}
-          >
-            탐색
-          </Button>
-          {authenticated && (
-            <>
+        {/* 데스크탑 네비게이션 */}
+        <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 0.5, flexGrow: 1 }}>
+          {navItems.map((item) => (
             <Button
+              key={item.path}
               color="inherit"
-              onClick={() => navigate('/trips')}
-              sx={navBtnStyle('/trips')}
+              startIcon={item.icon}
+              onClick={() => navigate(item.path)}
+              sx={{
+                ...navBtnStyle(item.path),
+                ...(item.path === '/admin' ? { color: isActive('/admin') ? 'white' : '#ffcc80' } : {}),
+              }}
             >
-              내 여행
+              {item.label}
             </Button>
-            <Button
-              color="inherit"
-              startIcon={<PhotoLibraryIcon />}
-              onClick={() => navigate('/gallery')}
-              sx={navBtnStyle('/gallery')}
-            >
-              갤러리
-            </Button>
-            {!admin && (
-              <Button
-                color="inherit"
-                startIcon={<BookmarkIcon />}
-                onClick={() => navigate('/wishlist')}
-                sx={navBtnStyle('/wishlist')}
-              >
-                위시리스트
-              </Button>
-            )}
-            {admin && (
-              <Button
-                color="inherit"
-                startIcon={<AdminPanelSettingsIcon />}
-                onClick={() => navigate('/admin')}
-                sx={{
-                  ...navBtnStyle('/admin'),
-                  color: isActive('/admin') ? 'white' : '#ffcc80',
-                }}
-              >
-                관리자
-              </Button>
-            )}
-            </>
-          )}
+          ))}
         </Box>
 
+        <Box sx={{ flexGrow: { xs: 1, md: 0 } }} />
+
+        {/* 우측 액션 영역 */}
         {authenticated ? (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
             {!admin && (
@@ -189,12 +186,20 @@ const Navbar = () => {
                 </IconButton>
               </Tooltip>
             )}
+            <IconButton
+              color="inherit"
+              onClick={handleLogout}
+              size="small"
+              sx={{ display: { xs: 'flex', md: 'none' } }}
+            >
+              <LogoutIcon />
+            </IconButton>
             <Button
               color="inherit"
               startIcon={<LogoutIcon />}
               onClick={handleLogout}
               size="small"
-              sx={{ whiteSpace: 'nowrap' }}
+              sx={{ whiteSpace: 'nowrap', display: { xs: 'none', md: 'flex' } }}
             >
               로그아웃
             </Button>
@@ -213,6 +218,67 @@ const Navbar = () => {
         )}
       </Toolbar>
 
+      {/* 모바일 드로어 */}
+      <Drawer
+        anchor="left"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        PaperProps={{ sx: { width: 240 } }}
+      >
+        <Box sx={{ p: 2, bgcolor: 'primary.main', color: 'white', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <ExploreIcon />
+          <Typography variant="h6" fontWeight="bold">TripLog</Typography>
+        </Box>
+        {authenticated && (
+          <Box sx={{ px: 2, py: 1.5, bgcolor: 'grey.50' }}>
+            <Typography variant="body2" color="text.secondary">
+              {user?.nickname}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {user?.email}
+            </Typography>
+          </Box>
+        )}
+        <Divider />
+        <List sx={{ flexGrow: 1 }}>
+          {navItems.map((item) => (
+            <ListItemButton
+              key={item.path}
+              onClick={() => handleNavDrawer(item.path)}
+              selected={isActive(item.path)}
+              sx={{
+                ...(item.path === '/admin' && { color: '#e65100' }),
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 36, ...(item.path === '/admin' && { color: '#e65100' }) }}>
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText primary={item.label} />
+            </ListItemButton>
+          ))}
+        </List>
+        <Divider />
+        {authenticated ? (
+          <>
+            {!admin && (
+              <ListItemButton onClick={() => handleNavDrawer('/profile')}>
+                <ListItemIcon sx={{ minWidth: 36 }}><AccountCircleIcon /></ListItemIcon>
+                <ListItemText primary="내 프로필" />
+              </ListItemButton>
+            )}
+            <ListItemButton onClick={handleLogout}>
+              <ListItemIcon sx={{ minWidth: 36 }}><LogoutIcon /></ListItemIcon>
+              <ListItemText primary="로그아웃" />
+            </ListItemButton>
+          </>
+        ) : (
+          <ListItemButton onClick={() => handleNavDrawer('/login')}>
+            <ListItemIcon sx={{ minWidth: 36 }}><LoginIcon /></ListItemIcon>
+            <ListItemText primary="로그인" />
+          </ListItemButton>
+        )}
+      </Drawer>
+
       {/* 알림 팝오버 */}
       <Popover
         open={Boolean(notifAnchor)}
@@ -220,7 +286,7 @@ const Navbar = () => {
         onClose={handleCloseNotif}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        PaperProps={{ sx: { width: 320, maxHeight: 400 } }}
+        PaperProps={{ sx: { width: { xs: 'calc(100vw - 32px)', sm: 320 }, maxHeight: 400 } }}
       >
         <Box sx={{ px: 2, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="subtitle2" fontWeight="bold">알림</Typography>

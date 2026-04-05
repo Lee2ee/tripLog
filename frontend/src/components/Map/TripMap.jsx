@@ -8,7 +8,7 @@ import { trackApiCall } from '../../utils/mapsUsageTracker';
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 const LIBRARIES = ['places'];
 const KOREA_CENTER = { lat: 36.5, lng: 127.5 };
-const containerStyle = { width: '100%', height: '450px', borderRadius: '8px' };
+const containerStyle = { width: '100%', height: '100%', borderRadius: '8px' };
 const MAP_OPTIONS = {
   streetViewControl: false,
   mapTypeControl: false,
@@ -342,45 +342,45 @@ const TripMap = ({ locations = [], onLocationSelect, readOnly = false }) => {
       </Box>
 
       {/* 지도: 뷰포트에 들어올 때만 렌더링 (Intersection Observer) */}
-      {isVisible && isLoaded ? (
-        <GoogleMap
-          mapContainerStyle={containerStyle}
-          center={KOREA_CENTER}
-          zoom={7}
-          options={MAP_OPTIONS}
-          onLoad={onMapLoad}
-          onUnmount={onMapUnmount}
-        >
-          {selectedMarker && (
-            <InfoWindow
-              position={{ lat: selectedMarker.latitude, lng: selectedMarker.longitude }}
-              onCloseClick={() => setSelectedMarker(null)}
-            >
-              <Box>
-                <Typography variant="subtitle2" fontWeight="bold">{selectedMarker.name}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {selectedMarker.latitude.toFixed(6)}, {selectedMarker.longitude.toFixed(6)}
-                </Typography>
-              </Box>
-            </InfoWindow>
-          )}
-        </GoogleMap>
-      ) : (
-        <Box
-          sx={{
-            ...containerStyle,
-            bgcolor: 'grey.100',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          {isLoaded
-            ? <CircularProgress size={24} />   // 로드됐지만 아직 뷰포트 밖
-            : <CircularProgress size={24} />   // SDK 로딩 중
-          }
-        </Box>
-      )}
+      <Box sx={{ width: '100%', height: { xs: 280, sm: 350, md: 420 }, borderRadius: '8px', overflow: 'hidden' }}>
+        {isVisible && isLoaded ? (
+          <GoogleMap
+            mapContainerStyle={containerStyle}
+            center={KOREA_CENTER}
+            zoom={7}
+            options={MAP_OPTIONS}
+            onLoad={onMapLoad}
+            onUnmount={onMapUnmount}
+          >
+            {selectedMarker && (
+              <InfoWindow
+                position={{ lat: selectedMarker.latitude, lng: selectedMarker.longitude }}
+                onCloseClick={() => setSelectedMarker(null)}
+              >
+                <Box>
+                  <Typography variant="subtitle2" fontWeight="bold">{selectedMarker.name}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {selectedMarker.latitude.toFixed(6)}, {selectedMarker.longitude.toFixed(6)}
+                  </Typography>
+                </Box>
+              </InfoWindow>
+            )}
+          </GoogleMap>
+        ) : (
+          <Box
+            sx={{
+              width: '100%',
+              height: '100%',
+              bgcolor: 'grey.100',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <CircularProgress size={24} />
+          </Box>
+        )}
+      </Box>
     </Box>
   );
 };

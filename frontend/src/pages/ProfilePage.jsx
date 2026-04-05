@@ -150,7 +150,7 @@ const ProfilePage = () => {
       {/* 활동 통계 */}
       <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1.5 }}>활동 통계</Typography>
       <Grid container spacing={1.5}>
-        <Grid item xs={4}>
+        <Grid item xs={12} sm={4}>
           <StatCard
             icon={<ExploreIcon fontSize="inherit" />}
             label="여행"
@@ -158,7 +158,7 @@ const ProfilePage = () => {
             color="#1976d2"
           />
         </Grid>
-        <Grid item xs={4}>
+        <Grid item xs={6} sm={4}>
           <StatCard
             icon={<PhotoLibraryIcon fontSize="inherit" />}
             label="사진"
@@ -166,7 +166,7 @@ const ProfilePage = () => {
             color="#388e3c"
           />
         </Grid>
-        <Grid item xs={4}>
+        <Grid item xs={6} sm={4}>
           <StatCard
             icon={<BookmarkIcon fontSize="inherit" />}
             label="위시리스트"

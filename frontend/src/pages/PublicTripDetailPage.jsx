@@ -176,7 +176,7 @@ const PublicTripDetailPage = () => {
           {activeDay && (
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
               {/* 좌측: 장소 목록 (읽기 전용) */}
-              <Box sx={{ flex: '0 0 340px', minWidth: 0 }}>
+              <Box sx={{ flex: { xs: '1 1 auto', md: '0 0 320px' }, minWidth: 0, width: '100%' }}>
                 <Paper variant="outlined" sx={{ borderRadius: 2 }}>
                   <Box sx={{ p: 2 }}>
                     <Typography variant="subtitle1" fontWeight="bold">

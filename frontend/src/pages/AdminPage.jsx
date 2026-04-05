@@ -318,7 +318,7 @@ const AdminPage = () => {
 
   /* ── 렌더 ──────────────────────────────────────────── */
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Container maxWidth="xl" sx={{ py: { xs: 2, sm: 4 }, px: { xs: 1.5, sm: 2 } }}>
       <Typography variant="h4" fontWeight="bold" mb={1}>관리자 페이지</Typography>
       <Typography variant="body2" color="text.secondary" mb={3}>시스템 현황 및 콘텐츠 관리</Typography>
 
@@ -574,7 +574,7 @@ const AdminPage = () => {
                   </Button>
                 </Box>
               </Box>
-              <TableContainer component={Paper} elevation={2} sx={{ borderRadius: 2 }}>
+              <TableContainer component={Paper} elevation={2} sx={{ borderRadius: 2, overflowX: 'auto' }}>
                 <Table size="small">
                   <TableHead sx={{ bgcolor: 'grey.100' }}>
                     <TableRow>

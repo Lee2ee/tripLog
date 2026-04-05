@@ -97,9 +97,9 @@ const PublicTripsPage = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment> }}
-                sx={{ minWidth: 220 }}
+                sx={{ flex: { xs: '1 1 100%', sm: '1 1 180px' }, minWidth: 0 }}
               />
-              <FormControl size="small" sx={{ minWidth: 130 }}>
+              <FormControl size="small" sx={{ flex: '1 1 110px', minWidth: 0 }}>
                 <InputLabel>정렬</InputLabel>
                 <Select value={sort} label="정렬" onChange={(e) => setSort(e.target.value)}>
                   <MenuItem value="newest">최신순</MenuItem>
@@ -108,7 +108,7 @@ const PublicTripsPage = () => {
                   <MenuItem value="duration">기간 긴 순</MenuItem>
                 </Select>
               </FormControl>
-              <FormControl size="small" sx={{ minWidth: 130 }}>
+              <FormControl size="small" sx={{ flex: '1 1 110px', minWidth: 0 }}>
                 <InputLabel>태그</InputLabel>
                 <Select value={selectedTag} label="태그" onChange={(e) => setSelectedTag(e.target.value)}>
                   <MenuItem value="">전체</MenuItem>
