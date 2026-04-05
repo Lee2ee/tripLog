@@ -14,6 +14,7 @@ import PublicTripsPage from './pages/PublicTripsPage';
 import PublicTripDetailPage from './pages/PublicTripDetailPage';
 import ProfilePage from './pages/ProfilePage';
 import WishlistPage from './pages/WishlistPage';
+import PrivacyPage from './pages/PrivacyPage';
 import { Box } from '@mui/material';
 import { flushTrackingQueue } from './utils/mapsUsageTracker';
 import { isAuthenticated } from './store/authStore';
@@ -88,6 +89,7 @@ const App = () => {
               </AdminRoute>
             }
           />
+          <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Box>
