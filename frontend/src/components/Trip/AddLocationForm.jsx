@@ -6,6 +6,7 @@ import {
 } from '@mui/material';
 import AddLocationAltIcon from '@mui/icons-material/AddLocationAlt';
 import SearchIcon from '@mui/icons-material/Search';
+import PinDropIcon from '@mui/icons-material/PinDrop';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import DirectionsWalkIcon from '@mui/icons-material/DirectionsWalk';
 import DirectionsTransitIcon from '@mui/icons-material/DirectionsTransit';
@@ -41,9 +42,39 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
+  const [inputMode, setInputMode] = useState('search'); // 'search' | 'manual'
   const [searchInput, setSearchInput] = useState('');
   const [searchOptions, setSearchOptions] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [manualCoord, setManualCoord] = useState('');
+  const [manualCoordError, setManualCoordError] = useState('');
+
+  const parseCoord = (str) => {
+    const parts = str.split(',').map((s) => s.trim());
+    if (parts.length !== 2) return null;
+    const lat = parseFloat(parts[0]);
+    const lng = parseFloat(parts[1]);
+    if (isNaN(lat) || isNaN(lng)) return null;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    return { lat, lng };
+  };
+
+  const switchMode = (mode) => {
+    setInputMode(mode);
+    setName(''); setPin(null);
+    setManualCoord(''); setManualCoordError('');
+    setNameError(''); setPinError('');
+    setAcKey((k) => k + 1);
+  };
+
+  const handleManualCoordChange = (e) => {
+    const val = e.target.value;
+    setManualCoord(val);
+    if (!val.trim()) { setPin(null); setManualCoordError(''); return; }
+    const parsed = parseCoord(val);
+    if (parsed) { setPin(parsed); setManualCoordError(''); setPinError(''); }
+    else { setPin(null); setManualCoordError('올바른 형식이 아닙니다 (예: 33.5917, 130.4004)'); }
+  };
 
   useEffect(() => {
     if (!searchInput.trim() || searchInput.length < 2) {
@@ -94,6 +125,8 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
       setPin(null);
       setSearchInput('');
       setSearchOptions([]);
+      setManualCoord('');
+      setManualCoordError('');
       setAcKey((k) => k + 1);
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch (err) {
@@ -117,7 +150,42 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
       <Box component="form" onSubmit={handleSubmit}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
 
-          <Autocomplete
+          {/* 입력 모드 토글 */}
+          <ToggleButtonGroup value={inputMode} exclusive onChange={(_, v) => { if (v) switchMode(v); }} size="small">
+            <ToggleButton value="search" sx={{ px: 1.5, gap: 0.5, fontSize: '0.72rem' }}>
+              <SearchIcon sx={{ fontSize: 15 }} /> 검색
+            </ToggleButton>
+            <ToggleButton value="manual" sx={{ px: 1.5, gap: 0.5, fontSize: '0.72rem' }}>
+              <PinDropIcon sx={{ fontSize: 15 }} /> 직접 입력
+            </ToggleButton>
+          </ToggleButtonGroup>
+
+          {inputMode === 'manual' && (
+            <>
+              <TextField
+                label="장소 이름"
+                value={name}
+                onChange={(e) => { setName(e.target.value); setNameError(''); }}
+                error={!!nameError}
+                helperText={nameError}
+                size="small"
+                fullWidth
+                placeholder="예: 봄바키친"
+              />
+              <TextField
+                label="좌표 붙여넣기"
+                value={manualCoord}
+                onChange={handleManualCoordChange}
+                error={!!manualCoordError || !!pinError}
+                helperText={manualCoordError || pinError || '구글 맵 우클릭 → 좌표 복사 (예: 33.5917, 130.4004)'}
+                size="small"
+                fullWidth
+                placeholder="33.5917, 130.4004"
+              />
+            </>
+          )}
+
+          {inputMode === 'search' && <Autocomplete
             key={acKey}
             options={searchOptions}
             getOptionLabel={(opt) => {
@@ -179,7 +247,7 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
                 }}
               />
             )}
-          />
+          />}
 
           {pin && (
             <Chip
