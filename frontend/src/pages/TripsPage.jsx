@@ -389,8 +389,6 @@ const TripsPage = () => {
           </Grid>
         )}
       </Container>
-    </Box>
-  );
 
       <CreateTripDialog
         open={dialogOpen}
@@ -406,6 +404,8 @@ const TripsPage = () => {
         message={snackbar}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       />
+    </Box>
+  );
 };
 
 export default TripsPage;
