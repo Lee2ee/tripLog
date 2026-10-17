@@ -13,8 +13,7 @@ import LocationOnIcon from '@mui/icons-material/LocationOn';
 import { Autocomplete, useJsApiLoader } from '@react-google-maps/api';
 import { trackApiCall } from '../utils/mapsUsageTracker';
 
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
-const LIBRARIES = ['places'];
+import { GOOGLE_MAPS_API_KEY, LIBRARIES } from '../api/googleMapsConfig';
 
 const EMPTY_FORM = { name: '', latitude: '', longitude: '', address: '', memo: '' };
 

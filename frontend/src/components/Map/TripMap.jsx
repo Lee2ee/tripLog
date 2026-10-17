@@ -5,8 +5,7 @@ import { calculateTotalDistance } from './haversine';
 import RouteIcon from '@mui/icons-material/Route';
 import { trackApiCall } from '../../utils/mapsUsageTracker';
 
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
-const LIBRARIES = ['places'];
+import { GOOGLE_MAPS_API_KEY, LIBRARIES } from '../../api/googleMapsConfig';
 const KOREA_CENTER = { lat: 36.5, lng: 127.5 };
 const containerStyle = { width: '100%', height: '100%', borderRadius: '8px' };
 const MAP_OPTIONS = {

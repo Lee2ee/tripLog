@@ -12,8 +12,7 @@ import DirectionsWalkIcon from '@mui/icons-material/DirectionsWalk';
 import DirectionsTransitIcon from '@mui/icons-material/DirectionsTransit';
 import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike';
 
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
-const LIBRARIES = ['places'];
+import { GOOGLE_MAPS_API_KEY, LIBRARIES } from '../../api/googleMapsConfig';
 
 const TRANSPORT_MODES = [
   { value: 'DRIVING',   label: '자동차',   icon: <DirectionsCarIcon fontSize="small" />,     color: '#1976d2' },
