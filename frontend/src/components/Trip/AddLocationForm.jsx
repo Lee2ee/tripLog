@@ -85,7 +85,7 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
       setSearchLoading(true);
       try {
         const res = await fetch(
-          `https://photon.komoot.io/api/?q=${encodeURIComponent(searchInput)}&limit=6&lang=ko`
+          `https://photon.komoot.io/api/?q=${encodeURIComponent(searchInput)}&limit=6`
         );
         const data = await res.json();
         setSearchOptions(data.features || []);
