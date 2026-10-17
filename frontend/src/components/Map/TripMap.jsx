@@ -1,20 +1,10 @@
-import React, { useCallback, useState, useEffect, useRef } from 'react';
-import { GoogleMap, useJsApiLoader, InfoWindow } from '@react-google-maps/api';
-import { Box, Typography, CircularProgress, Alert, Button } from '@mui/material';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { Box, Typography, CircularProgress, Button } from '@mui/material';
 import { calculateTotalDistance } from './haversine';
 import RouteIcon from '@mui/icons-material/Route';
-import { trackApiCall } from '../../utils/mapsUsageTracker';
-
-import { GOOGLE_MAPS_API_KEY, LIBRARIES } from '../../api/googleMapsConfig';
-const KOREA_CENTER = { lat: 36.5, lng: 127.5 };
-const containerStyle = { width: '100%', height: '100%', borderRadius: '8px' };
-const MAP_OPTIONS = {
-  streetViewControl: false,
-  mapTypeControl: false,
-  fullscreenControl: true,
-  zoomControl: true,
-};
-
 
 const MODE_COLOR = {
   DRIVING:   '#1976d2',
@@ -22,79 +12,67 @@ const MODE_COLOR = {
   TRANSIT:   '#f57c00',
   BICYCLING: '#7b1fa2',
 };
-
 const getModeColor = (mode) => MODE_COLOR[mode] ?? '#1976d2';
 
-const applyBounds = (mapInstance, locs) => {
-  if (!mapInstance || !window.google) return;
-  if (locs.length === 0) {
-    mapInstance.setCenter(KOREA_CENTER);
-    mapInstance.setZoom(7);
-  } else if (locs.length === 1) {
-    mapInstance.setCenter({ lat: locs[0].latitude, lng: locs[0].longitude });
-    mapInstance.setZoom(14);
-  } else {
-    const bounds = new window.google.maps.LatLngBounds();
-    locs.forEach((loc) => bounds.extend({ lat: loc.latitude, lng: loc.longitude }));
-    mapInstance.fitBounds(bounds, { top: 60, right: 60, bottom: 60, left: 60 });
-  }
+const OSRM_PROFILE = {
+  DRIVING:   'driving',
+  WALKING:   'walking',
+  BICYCLING: 'cycling',
+  TRANSIT:   'driving',
 };
 
-const syncMarkers = (mapInstance, locs, markersRef, onMarkerClick) => {
-  markersRef.current.forEach((m) => m.setMap(null));
-  markersRef.current = locs.map((loc, index) => {
-    const marker = new window.google.maps.Marker({
-      map: mapInstance,
-      position: { lat: loc.latitude, lng: loc.longitude },
-      label: { text: String(index + 1), color: 'white', fontWeight: 'bold', fontSize: '13px' },
-      zIndex: 10,
-    });
-    marker.addListener('click', () => onMarkerClick(loc));
-    return marker;
+const KOREA_CENTER = [36.5, 127.5];
+
+const createNumberedIcon = (number, selected = false) =>
+  L.divIcon({
+    html: `<div style="
+      width:28px;height:28px;
+      background:${selected ? '#E07B39' : '#1A3A5C'};
+      color:white;border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      font-weight:700;font-size:12px;
+      border:2px solid white;
+      box-shadow:0 2px 6px rgba(0,0,0,0.35);
+    ">${number}</div>`,
+    className: '',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -16],
   });
+
+const BoundsController = ({ locations }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (locations.length === 0) {
+      map.setView(KOREA_CENTER, 7);
+    } else if (locations.length === 1) {
+      map.setView([locations[0].latitude, locations[0].longitude], 14);
+    } else {
+      map.fitBounds(
+        locations.map((l) => [l.latitude, l.longitude]),
+        { padding: [50, 50] }
+      );
+    }
+  }, [locations, map]);
+  return null;
 };
 
-// 직선 폴리라인 그리기 (Directions API 대체)
-const drawStraightLines = (mapInstance, locs, fallbackPolysRef) => {
-  fallbackPolysRef.current.forEach((p) => p.setMap(null));
-  fallbackPolysRef.current = [];
-
-  locs.slice(1).forEach((dest, i) => {
-    const origin = locs[i];
-    const color = getModeColor(dest.transportMode || 'DRIVING');
-    const poly = new window.google.maps.Polyline({
-      map: mapInstance,
-      path: [
-        { lat: origin.latitude, lng: origin.longitude },
-        { lat: dest.latitude, lng: dest.longitude },
-      ],
-      strokeColor: color,
-      strokeOpacity: 0.5,
-      strokeWeight: 3,
-      geodesic: true,
-    });
-    fallbackPolysRef.current.push(poly);
-  });
-};
-
-/**
- * @param {object[]} locations
- * @param {function} onLocationSelect
- * @param {boolean}  readOnly  true이면 Directions API 미호출, 직선만 표시
- */
 const TripMap = ({ locations = [], onLocationSelect, readOnly = false }) => {
-  const [selectedMarker, setSelectedMarker] = useState(null);
-  const onLocationSelectRef = useRef(onLocationSelect);
-  onLocationSelectRef.current = onLocationSelect;
-
+  const [routeSegments, setRouteSegments] = useState([]);
   const [routeDistance, setRouteDistance] = useState(null);
-  const [routeError, setRouteError] = useState(false);
   const [routeLoading, setRouteLoading] = useState(false);
-
-  // Intersection Observer: 뷰포트에 들어올 때만 지도 렌더링
+  const [routeError, setRouteError] = useState(false);
+  const [routeRequested, setRouteRequested] = useState(false);
+  const [selectedLocId, setSelectedLocId] = useState(null);
   const [isVisible, setIsVisible] = useState(false);
-  const containerRef = useRef(null);
 
+  const containerRef = useRef(null);
+  const fetchGenRef = useRef(0);
+  const routeRequestedRef = useRef(false);
+  const locationsRef = useRef(locations);
+  locationsRef.current = locations;
+
+  // Intersection Observer: map renders only when visible
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => { if (entry.isIntersecting) setIsVisible(true); },
@@ -104,228 +82,105 @@ const TripMap = ({ locations = [], onLocationSelect, readOnly = false }) => {
     return () => observer.disconnect();
   }, []);
 
-  const mapRef = useRef(null);
-  const markersRef = useRef([]);
-  const renderersRef = useRef([]);
-  const fallbackPolysRef = useRef([]);
-  const fetchGenRef = useRef(0);
-  const routeDebounceRef = useRef(null);
-
-  // 경로 on-demand: 사용자가 버튼을 눌렀는지 여부 (ref로 관리해 클로저 문제 방지)
-  const routeRequestedRef = useRef(false);
-  const [routeRequested, setRouteRequested] = useState(false);
-
-  const locationsRef = useRef(locations);
-  locationsRef.current = locations;
-
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
-    libraries: LIBRARIES,
-    language: 'ko',
-    region: 'KR',
-  });
-
-  const clearRoute = useCallback(() => {
-    renderersRef.current.forEach((r) => r.setMap(null));
-    renderersRef.current = [];
-    fallbackPolysRef.current.forEach((p) => p.setMap(null));
-    fallbackPolysRef.current = [];
-  }, []);
-
-  const fetchRoute = useCallback((mapInstance, locs) => {
-    clearRoute();
+  const fetchOSRMRoute = useCallback(async (locs) => {
+    if (!locs || locs.length < 2) return;
+    const gen = ++fetchGenRef.current;
+    setRouteLoading(true);
     setRouteError(false);
 
-    if (!mapInstance || !window.google || locs.length < 2) {
-      setRouteDistance(null);
-      return;
-    }
-
-    // readOnly → 직선만 표시
-    if (readOnly) {
-      drawStraightLines(mapInstance, locs, fallbackPolysRef);
-      setRouteDistance(null);
-      return;
-    }
-
-    // 경로 미요청 상태 → 마커만 표시
-    if (!routeRequestedRef.current) return;
-
-    // 연속된 동일 이동수단 세그먼트를 그룹화 → waypoints로 묶어 API 호출 횟수 최소화
-    // (구글 무료 한도: 경유지 최대 8개 = 출발+경유8+도착 총 10개)
+    // Group consecutive same-mode segments (max 9 stops per group)
     const groups = [];
     let groupOriginIdx = 0;
     for (let i = 1; i < locs.length; i++) {
       const mode = locs[i].transportMode || 'DRIVING';
-      const isLastInGroup =
+      const isLast =
         i === locs.length - 1 ||
         (locs[i + 1]?.transportMode || 'DRIVING') !== mode ||
         i - groupOriginIdx >= 9;
-      if (isLastInGroup) {
+      if (isLast) {
         groups.push({ mode, stops: locs.slice(groupOriginIdx, i + 1) });
         groupOriginIdx = i;
       }
     }
 
-    const gen = ++fetchGenRef.current;
-    setRouteLoading(true);
-    const service = new window.google.maps.DirectionsService();
-    let completed = 0;
-    let totalMeters = 0;
-    let hasError = false;
-
-    groups.forEach(({ mode, stops }) => {
-      const color = getModeColor(mode);
-      service.route(
-        {
-          origin: { lat: stops[0].latitude, lng: stops[0].longitude },
-          destination: { lat: stops[stops.length - 1].latitude, lng: stops[stops.length - 1].longitude },
-          waypoints: stops.slice(1, -1).map((s) => ({
-            location: { lat: s.latitude, lng: s.longitude },
-            stopover: true,
-          })),
-          travelMode: window.google.maps.TravelMode[mode],
-          optimizeWaypoints: false,
-        },
-        (result, status) => {
-          if (fetchGenRef.current !== gen) return;
-          completed += 1;
-
-          if (status === 'OK') {
-            const renderer = new window.google.maps.DirectionsRenderer({
-              map: mapInstance,
-              directions: result,
-              suppressMarkers: true,
-              preserveViewport: true,
-              polylineOptions: { strokeColor: color, strokeOpacity: 0.85, strokeWeight: 5 },
-            });
-            renderersRef.current.push(renderer);
-            result.routes[0].legs.forEach((leg) => { totalMeters += leg.distance.value; });
-          } else {
-            hasError = true;
-            stops.slice(1).forEach((dest, i) => {
-              const origin = stops[i];
-              const poly = new window.google.maps.Polyline({
-                map: mapInstance,
-                path: [
-                  { lat: origin.latitude, lng: origin.longitude },
-                  { lat: dest.latitude, lng: dest.longitude },
-                ],
-                strokeColor: color,
-                strokeOpacity: 0.5,
-                strokeWeight: 3,
-                geodesic: true,
-              });
-              fallbackPolysRef.current.push(poly);
-            });
+    const results = await Promise.all(
+      groups.map(async ({ mode, stops }) => {
+        const profile = OSRM_PROFILE[mode] || 'driving';
+        const coords = stops.map((s) => `${s.longitude},${s.latitude}`).join(';');
+        try {
+          const res = await fetch(
+            `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=full&geometries=geojson`
+          );
+          const data = await res.json();
+          if (data.code === 'Ok' && data.routes?.[0]) {
+            const positions = data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+            return { positions, color: getModeColor(mode), distance: data.routes[0].distance };
           }
+        } catch {}
+        // Fallback: straight lines
+        return {
+          positions: stops.map((s) => [s.latitude, s.longitude]),
+          color: getModeColor(mode),
+          distance: 0,
+          isStraight: true,
+        };
+      })
+    );
 
-          if (completed === groups.length) {
-            setRouteLoading(false);
-            setRouteError(hasError);
-            setRouteDistance(totalMeters > 0 ? (totalMeters / 1000).toFixed(1) : null);
-            trackApiCall('DIRECTIONS', groups.length);
-          }
-        }
-      );
-    });
-  }, [clearRoute, readOnly]);
-
-  const handleShowRoute = useCallback(() => {
-    routeRequestedRef.current = true;
-    setRouteRequested(true);
-    if (mapRef.current) fetchRoute(mapRef.current, locationsRef.current);
-  }, [fetchRoute]);
-
-  const handleMarkerClick = useCallback((loc) => {
-    setSelectedMarker(loc);
-    onLocationSelectRef.current?.(loc);
+    if (fetchGenRef.current !== gen) return;
+    setRouteSegments(results);
+    const totalMeters = results.reduce((sum, r) => sum + (r.distance || 0), 0);
+    setRouteDistance(totalMeters > 0 ? (totalMeters / 1000).toFixed(1) : null);
+    setRouteError(results.some((r) => r.isStraight));
+    setRouteLoading(false);
   }, []);
 
-  const onMapLoad = useCallback((mapInstance) => {
-    mapRef.current = mapInstance;
-    syncMarkers(mapInstance, locationsRef.current, markersRef, handleMarkerClick);
-    fetchRoute(mapInstance, locationsRef.current);
-    applyBounds(mapInstance, locationsRef.current);
-    trackApiCall('MAP_LOAD', 1);
-  }, [fetchRoute, handleMarkerClick]);
-
-  const onMapUnmount = useCallback(() => {
-    clearRoute();
-    markersRef.current.forEach((m) => m.setMap(null));
-    markersRef.current = [];
-    mapRef.current = null;
-  }, [clearRoute]);
-
+  // Re-fetch when locations change (only if route was previously requested)
   useEffect(() => {
-    if (!mapRef.current) return;
-    syncMarkers(mapRef.current, locations, markersRef, handleMarkerClick);
-    applyBounds(mapRef.current, locations);
+    if (readOnly || !routeRequestedRef.current) return;
+    setRouteSegments([]);
+    const timer = setTimeout(() => fetchOSRMRoute(locationsRef.current), 500);
+    return () => clearTimeout(timer);
+  }, [locations, readOnly, fetchOSRMRoute]);
 
-    if (routeDebounceRef.current) clearTimeout(routeDebounceRef.current);
-    routeDebounceRef.current = setTimeout(() => {
-      fetchRoute(mapRef.current, locations);
-    }, 500);
+  const handleShowRoute = () => {
+    routeRequestedRef.current = true;
+    setRouteRequested(true);
+    fetchOSRMRoute(locationsRef.current);
+  };
 
-    return () => {
-      if (routeDebounceRef.current) clearTimeout(routeDebounceRef.current);
-    };
-  }, [locations, fetchRoute, handleMarkerClick]);
+  // readOnly: straight lines, no API
+  const displaySegments = readOnly
+    ? locations.slice(1).map((dest, i) => ({
+        positions: [
+          [locations[i].latitude, locations[i].longitude],
+          [dest.latitude, dest.longitude],
+        ],
+        color: getModeColor(dest.transportMode || 'DRIVING'),
+      }))
+    : routeSegments;
 
   const straightDistance = calculateTotalDistance(locations);
-
   const distanceLabel = routeDistance
     ? `총 이동 거리 ${routeDistance} km`
     : locations.length >= 2
     ? `총 이동 거리 ${straightDistance} km (직선)`
     : null;
 
-  if (loadError) {
-    return (
-      <Alert severity="warning" sx={{ mt: 2 }}>
-        Google 지도를 불러오지 못했습니다. API 키 설정을 확인해주세요.
-      </Alert>
-    );
-  }
-
-  if (!GOOGLE_MAPS_API_KEY) {
-    return (
-      <Box
-        sx={{
-          height: 200, bgcolor: 'grey.100', borderRadius: 2,
-          display: 'flex', flexDirection: 'column', alignItems: 'center',
-          justifyContent: 'center', border: '2px dashed', borderColor: 'grey.300', p: 3,
-        }}
-      >
-        <Typography variant="body1" color="text.secondary" fontWeight="bold">
-          Google Maps API 키가 필요합니다
-        </Typography>
-        <Typography variant="body2" color="text.secondary" textAlign="center" mt={1}>
-          .env 파일에 VITE_GOOGLE_MAPS_API_KEY를 설정해주세요.
-        </Typography>
-      </Box>
-    );
-  }
-
   return (
     <Box ref={containerRef}>
-      {/* 거리 표시 + 경로 버튼 */}
+      {/* Distance label + route button */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5, flexWrap: 'wrap' }}>
         {distanceLabel && (
-          <Box
-            sx={{
-              display: 'inline-flex', alignItems: 'center',
-              px: 2, py: 0.75,
-              bgcolor: 'primary.main', color: 'white',
-              borderRadius: 2, fontSize: '0.875rem', fontWeight: 'bold',
-            }}
-          >
+          <Box sx={{
+            display: 'inline-flex', alignItems: 'center',
+            px: 2, py: 0.75,
+            bgcolor: 'primary.main', color: 'white',
+            borderRadius: 2, fontSize: '0.875rem', fontWeight: 'bold',
+          }}>
             {distanceLabel}
           </Box>
         )}
-
-        {/* 경로 표시 버튼 */}
         {!readOnly && locations.length >= 2 && !routeRequested && (
           <Button
             size="small"
@@ -337,54 +192,58 @@ const TripMap = ({ locations = [], onLocationSelect, readOnly = false }) => {
             경로 표시
           </Button>
         )}
-
         {routeLoading && <CircularProgress size={18} />}
-
         {routeError && (
           <Typography variant="caption" color="text.secondary">
-            일부 구간 경로를 찾을 수 없어 직선으로 표시합니다
+            일부 구간은 직선으로 표시됩니다
           </Typography>
         )}
-
-
       </Box>
 
-      {/* 지도: 뷰포트에 들어올 때만 렌더링 (Intersection Observer) */}
+      {/* Map */}
       <Box sx={{ width: '100%', height: { xs: 280, sm: 350, md: 420 }, borderRadius: '8px', overflow: 'hidden' }}>
-        {isVisible && isLoaded ? (
-          <GoogleMap
-            mapContainerStyle={containerStyle}
+        {isVisible ? (
+          <MapContainer
             center={KOREA_CENTER}
             zoom={7}
-            options={MAP_OPTIONS}
-            onLoad={onMapLoad}
-            onUnmount={onMapUnmount}
+            style={{ width: '100%', height: '100%' }}
           >
-            {selectedMarker && (
-              <InfoWindow
-                position={{ lat: selectedMarker.latitude, lng: selectedMarker.longitude }}
-                onCloseClick={() => setSelectedMarker(null)}
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            />
+            <BoundsController locations={locations} />
+            {locations.map((loc, i) => (
+              <Marker
+                key={loc.id ?? i}
+                position={[loc.latitude, loc.longitude]}
+                icon={createNumberedIcon(i + 1, selectedLocId === (loc.id ?? i))}
+                eventHandlers={{
+                  click: () => {
+                    setSelectedLocId(loc.id ?? i);
+                    onLocationSelect?.(loc);
+                  },
+                }}
               >
-                <Box>
-                  <Typography variant="subtitle2" fontWeight="bold">{selectedMarker.name}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {selectedMarker.latitude.toFixed(6)}, {selectedMarker.longitude.toFixed(6)}
-                  </Typography>
-                </Box>
-              </InfoWindow>
-            )}
-          </GoogleMap>
+                <Popup>
+                  <div>
+                    <strong style={{ fontSize: '13px' }}>{loc.name}</strong><br />
+                    <span style={{ fontSize: '11px', color: '#666' }}>
+                      {loc.latitude.toFixed(6)}, {loc.longitude.toFixed(6)}
+                    </span>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
+            {displaySegments.map((seg, i) => (
+              <Polyline key={i} positions={seg.positions} color={seg.color} weight={4} opacity={0.8} />
+            ))}
+          </MapContainer>
         ) : (
-          <Box
-            sx={{
-              width: '100%',
-              height: '100%',
-              bgcolor: 'grey.100',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
+          <Box sx={{
+            width: '100%', height: '100%', bgcolor: 'grey.100',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
             <CircularProgress size={24} />
           </Box>
         )}
