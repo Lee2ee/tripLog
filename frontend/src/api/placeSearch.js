@@ -9,7 +9,7 @@ export async function searchPlaces(query) {
     console.log('[Search] Foursquare 사용, query:', query);
     const res = await fetch(
       `https://api.foursquare.com/v3/places/search?query=${encodeURIComponent(query)}&limit=6`,
-      { headers: { Authorization: FSQ_KEY, Accept: 'application/json' } }
+      { headers: { Authorization: `Bearer ${FSQ_KEY}`, Accept: 'application/json' } }
     );
     console.log('[Search] Foursquare 응답 status:', res.status);
     if (!res.ok) {
