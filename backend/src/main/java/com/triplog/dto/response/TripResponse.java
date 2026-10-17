@@ -22,6 +22,7 @@ public class TripResponse {
     private LocalDate endDate;
     private LocalDateTime createdAt;
     private String coverImageUrl;
+    private String country;
     private Set<String> tags;
     private List<TripDayResponse> tripDays;
     private List<ImageResponse> images;

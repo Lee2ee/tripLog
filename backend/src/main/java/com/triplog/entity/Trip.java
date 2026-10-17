@@ -35,6 +35,8 @@ public class Trip {
     @Column(nullable = false)
     private String title;
 
+    private String country; // ISO 3166-1 alpha-2 (예: JP, KR, FR)
+
     @Column(nullable = false)
     private LocalDate startDate;
 

@@ -933,6 +933,7 @@ const TripDetailPage = () => {
                     dayId={activeDay.id}
                     onLocationAdded={(payload) => handleAddLocation(activeDay.id, payload)}
                     existingCount={activeDay.locations?.length || 0}
+                    country={trip?.country || ''}
                   />
                 </Box>
 

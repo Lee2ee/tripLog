@@ -62,6 +62,7 @@ public class TripService {
                 .endDate(request.getEndDate())
                 .isPublic(Boolean.TRUE.equals(request.getIsPublic()))
                 .tags(request.getTags() != null ? new HashSet<>(request.getTags()) : new HashSet<>())
+                .country(request.getCountry())
                 .build();
         trip = tripRepository.save(trip);
 
@@ -323,6 +324,7 @@ public class TripService {
                 .endDate(trip.getEndDate())
                 .createdAt(trip.getCreatedAt())
                 .coverImageUrl(coverImageUrl)
+                .country(trip.getCountry())
                 .tags(trip.getTags())
                 .isPublic(trip.isPublic())
                 .ownerId(trip.getUser().getId())
@@ -344,6 +346,7 @@ public class TripService {
                 .endDate(trip.getEndDate())
                 .createdAt(trip.getCreatedAt())
                 .coverImageUrl(coverImageUrl)
+                .country(trip.getCountry())
                 .tags(trip.getTags())
                 .isPublic(true)
                 .ownerId(trip.getUser().getId())
@@ -400,6 +403,7 @@ public class TripService {
                 .startDate(trip.getStartDate())
                 .endDate(trip.getEndDate())
                 .createdAt(trip.getCreatedAt())
+                .country(trip.getCountry())
                 .tags(trip.getTags())
                 .isPublic(trip.isPublic())
                 .ownerId(trip.getUser().getId())

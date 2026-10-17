@@ -25,4 +25,6 @@ public class TripRequest {
     private Boolean isPublic;
 
     private Set<String> tags;
+
+    private String country;
 }

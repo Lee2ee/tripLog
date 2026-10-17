@@ -4,11 +4,12 @@ const TOMTOM_KEY = import.meta.env.VITE_TOMTOM_API_KEY || '';
  * 장소 검색: TomTom(키 있을 때) → Photon(폴백)
  * 반환 형태: [{ id, name, detail, lat, lng }]
  */
-export async function searchPlaces(query) {
+export async function searchPlaces(query, countryCode = '') {
   if (TOMTOM_KEY) {
-    console.log('[Search] TomTom 사용, query:', query);
+    const countryParam = countryCode ? `&countrySet=${countryCode}` : '';
+    console.log('[Search] TomTom 사용, query:', query, '국가:', countryCode || '전체');
     const res = await fetch(
-      `https://api.tomtom.com/search/2/search/${encodeURIComponent(query)}.json?key=${TOMTOM_KEY}&limit=6&language=ko-KR`
+      `https://api.tomtom.com/search/2/search/${encodeURIComponent(query)}.json?key=${TOMTOM_KEY}&limit=6&language=ko-KR${countryParam}`
     );
     console.log('[Search] TomTom 응답 status:', res.status);
     if (!res.ok) {

@@ -29,7 +29,7 @@ const CATEGORIES = [
   { value: '기타',  emoji: '📍' },
 ];
 
-const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) => {
+const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0, country = '' }) => {
   const [acKey, setAcKey] = useState(0);
 
   const [name, setName] = useState('');
@@ -85,7 +85,7 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
     const timer = setTimeout(async () => {
       setSearchLoading(true);
       try {
-        const results = await searchPlaces(searchInput);
+        const results = await searchPlaces(searchInput, country);
         setSearchOptions(results);
       } catch {
         setSearchOptions([]);

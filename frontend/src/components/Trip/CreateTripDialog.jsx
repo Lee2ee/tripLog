@@ -3,9 +3,11 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Button, Box, Alert, CircularProgress,
   FormControlLabel, Switch, Typography, Divider, Chip,
+  MenuItem,
 } from '@mui/material';
 import LockIcon from '@mui/icons-material/Lock';
 import PublicIcon from '@mui/icons-material/Public';
+import { COUNTRIES } from '../../constants/countries';
 
 export const TRIP_TAGS = [
   '국내여행', '해외여행', '혼자', '커플', '가족', '친구',
@@ -19,6 +21,7 @@ const CreateTripDialog = ({ open, onClose, onSubmit, loading }) => {
     endDate: '',
     isPublic: false,
     tags: [],
+    country: '',
   });
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState('');
@@ -55,7 +58,7 @@ const CreateTripDialog = ({ open, onClose, onSubmit, loading }) => {
     setSubmitError('');
     try {
       await onSubmit({ ...formData, tags: formData.tags });
-      setFormData({ title: '', startDate: '', endDate: '', isPublic: false, tags: [] });
+      setFormData({ title: '', startDate: '', endDate: '', isPublic: false, tags: [], country: '' });
       setErrors({});
     } catch (error) {
       setSubmitError(error.response?.data?.message || '여행 생성에 실패했습니다');
@@ -63,7 +66,7 @@ const CreateTripDialog = ({ open, onClose, onSubmit, loading }) => {
   };
 
   const handleClose = () => {
-    setFormData({ title: '', startDate: '', endDate: '', isPublic: false, tags: [] });
+    setFormData({ title: '', startDate: '', endDate: '', isPublic: false, tags: [], country: '' });
     setErrors({});
     setSubmitError('');
     onClose();
@@ -80,6 +83,20 @@ const CreateTripDialog = ({ open, onClose, onSubmit, loading }) => {
             error={!!errors.title} helperText={errors.title}
             fullWidth required autoFocus placeholder="예: 유럽 여름 여행"
           />
+          <TextField
+            select
+            label="여행 국가"
+            name="country"
+            value={formData.country}
+            onChange={handleChange}
+            fullWidth
+          >
+            <MenuItem value=""><em>선택 안 함</em></MenuItem>
+            {COUNTRIES.map((c) => (
+              <MenuItem key={c.code} value={c.code}>{c.label}</MenuItem>
+            ))}
+          </TextField>
+
           <TextField
             label="시작일" name="startDate" type="date" value={formData.startDate} onChange={handleChange}
             error={!!errors.startDate} helperText={errors.startDate}
