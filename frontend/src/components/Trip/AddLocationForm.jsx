@@ -33,6 +33,7 @@ const CATEGORIES = [
 
 const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) => {
   const autocompleteRef = useRef(null);
+  const [acKey, setAcKey] = useState(0);
 
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
@@ -91,6 +92,7 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
       setCategory('');
       setMemo('');
       setPin(null);
+      setAcKey((k) => k + 1);
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch (err) {
       setErrorMsg(err.response?.data?.message || '장소 추가에 실패했습니다');
@@ -116,13 +118,13 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
           {/* Google Places 검색 */}
           {isLoaded ? (
             <Autocomplete
+              key={acKey}
               onLoad={(ac) => { autocompleteRef.current = ac; }}
               onPlaceChanged={onPlaceChanged}
               options={{ fields: ['name', 'geometry'] }}
             >
               <TextField
                 label="장소 검색"
-                value={name}
                 onChange={(e) => { setName(e.target.value); setNameError(''); setPin(null); }}
                 error={!!nameError || !!pinError}
                 helperText={nameError || pinError || 'Google에서 장소를 검색하면 좌표가 자동 입력됩니다'}
