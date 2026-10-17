@@ -3,7 +3,7 @@ import {
   Container, Box, Typography, Tabs, Tab, CircularProgress, Alert,
   List, ListItem, ListItemText, ListItemSecondaryAction, ListItemAvatar,
   Avatar, IconButton, Chip, Paper, Divider, Breadcrumbs, Link, Tooltip,
-  TextField, Button, Stack, Badge,
+  TextField, Button, Stack, Badge, Drawer,
   Dialog, DialogTitle, DialogContent, DialogActions,
   ToggleButton, ToggleButtonGroup, MenuItem, Snackbar,
 } from '@mui/material';
@@ -37,6 +37,7 @@ import DirectionsTransitIcon from '@mui/icons-material/DirectionsTransit';
 import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import CloseIcon from '@mui/icons-material/Close';
 import ShareIcon from '@mui/icons-material/Share';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import { TRIP_TAGS } from '../components/Trip/CreateTripDialog';
@@ -190,8 +191,8 @@ const EditLocationDialog = ({ open, loc, isFirst, onClose, onSave }) => {
   );
 };
 
-/* ── 장소 이미지 갤러리 패널 (우측 패널) ── */
-const LocationGalleryPanel = ({ locations, selectedLocId, canEdit, onImageUploaded, onImageDeleted }) => {
+/* ── 장소 이미지 갤러리 (Drawer) ── */
+const LocationGalleryPanel = ({ locations, selectedLocId, canEdit, onImageUploaded, onImageDeleted, onClose }) => {
   const [uploading, setUploading] = React.useState(false);
   const [enlarged, setEnlarged] = React.useState(null);
 
@@ -224,39 +225,57 @@ const LocationGalleryPanel = ({ locations, selectedLocId, canEdit, onImageUpload
   };
 
   return (
-    <Paper variant="outlined" sx={{ borderRadius: 2 }}>
-      <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-        <PhotoCameraIcon color="action" fontSize="small" />
-        <Typography variant="subtitle1" fontWeight="bold">
-          {selectedLoc ? `${selectedLoc.name} 사진` : '장소 사진'}
-        </Typography>
-        {selectedLoc && <Chip label={images.length} size="small" sx={{ ml: 'auto' }} />}
-      </Box>
-      <Divider />
-
-      {!selectedLoc ? (
-        <Box sx={{ p: 4, textAlign: 'center' }}>
-          <PhotoCameraIcon sx={{ fontSize: 40, color: 'grey.300', mb: 1 }} />
-          <Typography variant="body2" color="text.secondary">
-            지도의 핀 또는 목록의 카메라 아이콘을 눌러<br />장소 사진을 확인하세요
-          </Typography>
+    <>
+      <Drawer
+        anchor="right"
+        open={!!selectedLocId}
+        onClose={onClose}
+        PaperProps={{
+          sx: {
+            width: { xs: '100%', sm: 340 },
+            display: 'flex',
+            flexDirection: 'column',
+          },
+        }}
+      >
+        {/* 헤더 */}
+        <Box sx={{
+          px: 2, py: 1.5,
+          display: 'flex', alignItems: 'center', gap: 1.5,
+          background: 'linear-gradient(135deg, #1565c0 0%, #1976d2 60%, #42a5f5 100%)',
+          color: 'white',
+          flexShrink: 0,
+        }}>
+          <PhotoCameraIcon sx={{ fontSize: 20 }} />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="subtitle2" fontWeight="bold" noWrap>
+              {selectedLoc?.name || ''}
+            </Typography>
+            <Typography variant="caption" sx={{ opacity: 0.8 }}>
+              사진 {images.length}장
+            </Typography>
+          </Box>
+          <IconButton onClick={onClose} size="small" sx={{ color: 'white', '&:hover': { bgcolor: 'rgba(255,255,255,0.15)' } }}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
         </Box>
-      ) : (
-        <Box sx={{ p: 2 }}>
+
+        {/* 이미지 그리드 */}
+        <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
           {images.length > 0 ? (
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0.75 }}>
               {images.map((img) => (
-                <Box key={img.id} sx={{ position: 'relative', width: 96, height: 96, flexShrink: 0 }}>
+                <Box key={img.id} sx={{ position: 'relative', aspectRatio: '1', borderRadius: 1.5, overflow: 'hidden', bgcolor: 'grey.100' }}>
                   <Box
                     component="img"
                     src={img.imageUrl}
                     alt=""
                     onClick={() => setEnlarged(img.imageUrl)}
                     sx={{
-                      width: 96, height: 96, objectFit: 'cover', borderRadius: 1.5,
-                      cursor: 'pointer', border: '1px solid', borderColor: 'divider',
-                      display: 'block',
-                      '&:hover': { opacity: 0.85 },
+                      width: '100%', height: '100%', objectFit: 'cover',
+                      cursor: 'pointer', display: 'block',
+                      transition: 'transform 0.2s',
+                      '&:hover': { transform: 'scale(1.06)' },
                     }}
                   />
                   {canEdit && (
@@ -264,167 +283,195 @@ const LocationGalleryPanel = ({ locations, selectedLocId, canEdit, onImageUpload
                       size="small"
                       onClick={() => handleDelete(img.id)}
                       sx={{
-                        position: 'absolute', top: 4, right: 4,
-                        bgcolor: 'rgba(0,0,0,0.45)', color: 'white', p: '2px',
-                        width: 22, height: 22,
+                        position: 'absolute', top: 3, right: 3,
+                        bgcolor: 'rgba(0,0,0,0.5)', color: 'white',
+                        width: 20, height: 20, p: 0,
                         '&:hover': { bgcolor: 'rgba(0,0,0,0.75)' },
                       }}
                     >
-                      <DeleteIcon sx={{ fontSize: 13 }} />
+                      <DeleteIcon sx={{ fontSize: 12 }} />
                     </IconButton>
                   )}
                 </Box>
               ))}
             </Box>
           ) : (
-            <Box sx={{ py: 2, textAlign: 'center' }}>
-              <Typography variant="body2" color="text.secondary">등록된 사진이 없습니다</Typography>
+            <Box sx={{ textAlign: 'center', py: 8 }}>
+              <PhotoCameraIcon sx={{ fontSize: 52, color: 'grey.200', mb: 1.5 }} />
+              <Typography variant="body2" color="text.disabled">사진이 없습니다</Typography>
+              {canEdit && (
+                <Typography variant="caption" color="text.disabled">아래 버튼으로 추가해보세요</Typography>
+              )}
             </Box>
           )}
+        </Box>
 
-          {canEdit && (
-            <Box component="label" sx={{ display: 'inline-flex' }}>
+        {/* 업로드 버튼 */}
+        {canEdit && (
+          <Box sx={{ p: 1.5, borderTop: '1px solid', borderColor: 'divider', flexShrink: 0 }}>
+            <Box component="label">
               <input type="file" accept="image/*" hidden onChange={handleUpload} disabled={uploading} />
               <Button
                 component="span"
+                variant="contained"
+                fullWidth
                 size="small"
-                variant="outlined"
-                startIcon={uploading ? <CircularProgress size={13} /> : <CloudUploadIcon fontSize="small" />}
+                startIcon={uploading ? <CircularProgress size={14} color="inherit" /> : <CloudUploadIcon fontSize="small" />}
                 disabled={uploading}
-                sx={{ fontSize: '0.75rem' }}
+                sx={{ borderRadius: 1.5 }}
               >
                 {uploading ? '업로드 중...' : '사진 추가'}
               </Button>
             </Box>
-          )}
-        </Box>
-      )}
+          </Box>
+        )}
+      </Drawer>
 
+      {/* 사진 확대 보기 */}
       <Dialog open={!!enlarged} onClose={() => setEnlarged(null)} maxWidth="xl"
         PaperProps={{ sx: { bgcolor: 'transparent', boxShadow: 'none' } }}>
         <DialogContent sx={{ p: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <IconButton onClick={() => setEnlarged(null)}
             sx={{ position: 'absolute', top: 8, right: 8, bgcolor: 'rgba(0,0,0,0.6)', color: 'white', zIndex: 1, '&:hover': { bgcolor: 'rgba(0,0,0,0.8)' } }}>
-            ✕
+            <CloseIcon />
           </IconButton>
           {enlarged && (
-            <Box component="img" src={enlarged} alt="" sx={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: 2, objectFit: 'contain' }} />
+            <Box component="img" src={enlarged} alt=""
+              sx={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: 2, objectFit: 'contain' }} />
           )}
         </DialogContent>
       </Dialog>
-    </Paper>
+    </>
   );
 };
 
-/* ── 드래그 가능한 장소 아이템 ── */
+/* ── 드래그 가능한 장소 아이템 (컴팩트) ── */
 const SortableLocationItem = ({ loc, index, dayId, onDelete, onEdit, deleteLoading, canEdit, selectedLocId, onSelectLoc }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: loc.id });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
-    background: isDragging ? '#f5f5f5' : 'transparent',
+    opacity: isDragging ? 0.4 : 1,
   };
   const transport = loc.transportMode ? TRANSPORT_ICONS[loc.transportMode] : null;
-  const isPhotoOpen = selectedLocId === loc.id;
+  const isSelected = selectedLocId === loc.id;
   const imageCount = (loc.images || []).length;
 
   return (
     <>
-      {/* 이동 수단 커넥터 (첫 번째 장소 제외) */}
+      {/* 이동수단 커넥터 */}
       {index > 0 && (
-        <Box sx={{ display: 'flex', alignItems: 'center', pl: 5, py: 0.3, bgcolor: 'grey.50' }}>
-          <Box sx={{ width: 2, height: 12, bgcolor: transport?.color ?? 'grey.300', mr: 1, ml: 1.5 }} />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, pl: 4, py: 0.4, bgcolor: 'grey.50' }}>
+          <Box sx={{ width: 2, height: 10, bgcolor: transport?.color ?? 'grey.200', borderRadius: 1, ml: 1.5 }} />
           {transport ? (
-            <Chip
-              icon={transport.icon}
-              label={transport.label}
-              size="small"
-              sx={{
-                height: 20, fontSize: '0.68rem', fontWeight: 'bold',
-                color: transport.color, borderColor: transport.color,
-                '& .MuiChip-icon': { color: transport.color },
-              }}
-              variant="outlined"
-            />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4 }}>
+              {React.cloneElement(transport.icon, { sx: { fontSize: 11, color: transport.color } })}
+              <Typography variant="caption" sx={{ fontSize: '0.65rem', color: transport.color, fontWeight: 600, lineHeight: 1 }}>
+                {transport.label}
+              </Typography>
+            </Box>
           ) : (
-            <Typography variant="caption" color="text.disabled">이동 수단 미지정</Typography>
+            <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'text.disabled' }}>미지정</Typography>
           )}
         </Box>
       )}
 
-      <ListItem ref={setNodeRef} style={style} sx={{ px: 2, alignItems: 'flex-start', gap: 0.5 }}>
-        {/* 드래그 핸들 */}
+      {/* 장소 아이템 */}
+      <Box
+        ref={setNodeRef}
+        style={style}
+        sx={{
+          display: 'flex', alignItems: 'center', gap: 1,
+          px: 1.5, py: 0.75,
+          borderLeft: '3px solid',
+          borderColor: isSelected ? 'primary.main' : 'transparent',
+          bgcolor: isSelected ? 'primary.50' : 'transparent',
+          transition: 'background-color 0.15s, border-color 0.15s',
+          '&:hover': { bgcolor: isSelected ? 'primary.50' : 'grey.50' },
+        }}
+      >
         {canEdit && (
           <Box
-            {...attributes}
-            {...listeners}
-            sx={{ cursor: 'grab', color: 'grey.400', display: 'flex', alignItems: 'center', flexShrink: 0, pt: 0.5, '&:active': { cursor: 'grabbing' } }}
+            {...attributes} {...listeners}
+            sx={{ color: 'grey.300', cursor: 'grab', flexShrink: 0, display: 'flex', '&:active': { cursor: 'grabbing' }, touchAction: 'none' }}
           >
-            <DragIndicatorIcon fontSize="small" />
+            <DragIndicatorIcon sx={{ fontSize: 15 }} />
           </Box>
         )}
 
-        <Box sx={{ width: 26, height: 26, borderRadius: '50%', bgcolor: 'primary.main', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 'bold', flexShrink: 0, mt: 0.25 }}>
+        {/* 번호 */}
+        <Box sx={{
+          width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+          bgcolor: isSelected ? 'primary.main' : 'grey.100',
+          color: isSelected ? 'white' : 'text.secondary',
+          border: '1.5px solid', borderColor: isSelected ? 'primary.main' : 'grey.300',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 11, fontWeight: 700, transition: 'all 0.15s',
+        }}>
           {index + 1}
         </Box>
 
-        {/* 텍스트 영역 — minWidth: 0 으로 flex 축소 허용 */}
-        <ListItemText
-          sx={{ minWidth: 0, mx: 1 }}
-          primary={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-              <span style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{loc.name}</span>
-              {loc.category && (
-                <Chip label={loc.category} size="small" variant="outlined" sx={{ height: 18, fontSize: '0.7rem', flexShrink: 0 }} />
-              )}
-            </Box>
-          }
-          secondary={
-            <Box component="span">
-              <Box component="span" sx={{ display: 'block', fontSize: '0.75rem' }}>
-                {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}
-              </Box>
-              {loc.memo && (
-                <Box component="span" sx={{ display: 'block', fontSize: '0.75rem', color: 'text.secondary', fontStyle: 'italic', mt: 0.25, wordBreak: 'break-word' }}>
-                  {loc.memo}
-                </Box>
-              )}
-            </Box>
-          }
-          primaryTypographyProps={{ fontWeight: 'medium' }}
-          secondaryTypographyProps={{ component: 'span' }}
-        />
+        {/* 텍스트 */}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography
+              variant="body2"
+              fontWeight={isSelected ? 700 : 500}
+              sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.82rem', lineHeight: 1.3 }}
+            >
+              {loc.name}
+            </Typography>
+            {loc.category && (
+              <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'text.secondary', flexShrink: 0 }}>
+                {loc.category}
+              </Typography>
+            )}
+          </Box>
+          {loc.memo && (
+            <Typography variant="caption" sx={{
+              color: 'text.disabled', fontSize: '0.68rem', lineHeight: 1.2,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block',
+            }}>
+              {loc.memo}
+            </Typography>
+          )}
+        </Box>
 
-        {/* 액션 버튼 — absolute 대신 flex item으로 배치 */}
-        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexShrink: 0, ml: 'auto' }}>
-          <Tooltip title="장소 사진">
-            <IconButton size="small" onClick={() => onSelectLoc(loc.id)}
-              color={isPhotoOpen ? 'primary' : 'default'}>
-              <Badge badgeContent={imageCount || null} color="primary" sx={{ '& .MuiBadge-badge': { fontSize: 9, minWidth: 14, height: 14 } }}>
-                <PhotoCameraIcon fontSize="small" />
+        {/* 액션 버튼 */}
+        <Box sx={{ display: 'flex', gap: 0.2, flexShrink: 0 }}>
+          <Tooltip title={`사진 ${imageCount}장`} arrow>
+            <IconButton
+              size="small" onClick={() => onSelectLoc(loc.id)}
+              color={isSelected ? 'primary' : 'default'}
+              sx={{ p: '3px', '&:hover': { bgcolor: 'primary.50' } }}
+            >
+              <Badge
+                badgeContent={imageCount || null} color="primary"
+                sx={{ '& .MuiBadge-badge': { fontSize: 8, minWidth: 13, height: 13, p: 0, top: 1, right: 1 } }}
+              >
+                <PhotoCameraIcon sx={{ fontSize: 15 }} />
               </Badge>
             </IconButton>
           </Tooltip>
           {canEdit && (
             <>
-              <Tooltip title="장소 수정">
-                <IconButton size="small" color="primary" onClick={() => onEdit(loc)}>
-                  <EditIcon fontSize="small" />
+              <Tooltip title="수정" arrow>
+                <IconButton size="small" color="primary" onClick={() => onEdit(loc)} sx={{ p: '3px' }}>
+                  <EditIcon sx={{ fontSize: 15 }} />
                 </IconButton>
               </Tooltip>
-              <Tooltip title="장소 삭제">
-                <IconButton size="small" color="error"
-                  onClick={() => onDelete(dayId, loc.id)}
-                  disabled={deleteLoading === loc.id}>
-                  {deleteLoading === loc.id ? <CircularProgress size={16} color="error" /> : <DeleteIcon fontSize="small" />}
+              <Tooltip title="삭제" arrow>
+                <IconButton size="small" color="error" onClick={() => onDelete(dayId, loc.id)}
+                  disabled={deleteLoading === loc.id} sx={{ p: '3px' }}>
+                  {deleteLoading === loc.id
+                    ? <CircularProgress size={13} color="error" />
+                    : <DeleteIcon sx={{ fontSize: 15 }} />}
                 </IconButton>
               </Tooltip>
             </>
           )}
         </Box>
-      </ListItem>
-
+      </Box>
     </>
   );
 };
@@ -804,85 +851,127 @@ const TripDetailPage = () => {
           </Box>
 
           {activeDay && (
-            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
-              {/* 좌측: 장소 목록 + 추가 폼 */}
-              <Box sx={{ flex: { xs: '1 1 auto', md: '0 0 320px' }, minWidth: 0, width: '100%' }}>
-                <Paper variant="outlined" sx={{ borderRadius: 2, mb: 2 }}>
-                  <Box sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" fontWeight="bold">
-                      장소 목록
-                      <Chip label={activeDay.locations?.length || 0} size="small" sx={{ ml: 1 }} />
-                    </Typography>
-                  </Box>
-                  <Divider />
-                  {activeDay.locations && activeDay.locations.length > 0 ? (
-                    <DndContext
-                      sensors={sensors}
-                      collisionDetection={closestCenter}
-                      onDragEnd={({ active, over }) => {
-                        if (over && active.id !== over.id) {
-                          handleReorder(activeDay.id, active.id, over.id, activeDay.locations);
-                        }
-                      }}
-                    >
-                      <SortableContext
-                        items={activeDay.locations.map((l) => l.id)}
-                        strategy={verticalListSortingStrategy}
-                      >
-                        <List dense disablePadding>
-                          {activeDay.locations.map((loc, index) => (
-                            <SortableLocationItem
-                              key={loc.id}
-                              loc={loc}
-                              index={index}
-                              dayId={activeDay.id}
-                              onDelete={handleDeleteLocation}
-                              onEdit={setEditingLoc}
-                              deleteLoading={deleteLoading}
-                              canEdit={isOwner || true}
-                              selectedLocId={selectedLocId}
-                              onSelectLoc={handleSelectLoc}
-                            />
-                          ))}
-                        </List>
-                      </SortableContext>
-                    </DndContext>
-                  ) : (
-                    <Box sx={{ p: 3, textAlign: 'center' }}>
-                      <LocationOnIcon sx={{ fontSize: 40, color: 'grey.400' }} />
-                      <Typography variant="body2" color="text.secondary">이 날짜에 등록된 장소가 없습니다</Typography>
+            <>
+              <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
+                {/* 좌측: 장소 목록 + 추가 폼 */}
+                <Box sx={{ flex: { xs: '1 1 auto', md: '0 0 300px' }, minWidth: 0, width: '100%' }}>
+                  {/* 장소 목록 카드 */}
+                  <Paper
+                    elevation={0}
+                    sx={{ borderRadius: 2, mb: 2, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}
+                  >
+                    <Box sx={{
+                      px: 2, py: 1.25,
+                      display: 'flex', alignItems: 'center', gap: 1,
+                      background: 'linear-gradient(90deg, #f0f4ff 0%, #e8eeff 100%)',
+                      borderBottom: '1px solid', borderColor: 'divider',
+                    }}>
+                      <LocationOnIcon color="primary" sx={{ fontSize: 17 }} />
+                      <Typography variant="subtitle2" fontWeight="bold" color="primary.dark">
+                        장소 목록
+                      </Typography>
+                      <Chip
+                        label={activeDay.locations?.length || 0}
+                        size="small"
+                        color="primary"
+                        sx={{ ml: 'auto', height: 18, fontSize: '0.68rem', '& .MuiChip-label': { px: 1 } }}
+                      />
                     </Box>
-                  )}
-                </Paper>
 
-                <AddLocationForm
-                  tripId={id}
-                  dayId={activeDay.id}
-                  onLocationAdded={(payload) => handleAddLocation(activeDay.id, payload)}
-                  existingCount={activeDay.locations?.length || 0}
-                />
-              </Box>
+                    {activeDay.locations && activeDay.locations.length > 0 ? (
+                      <Box sx={{
+                        maxHeight: 440,
+                        overflowY: 'auto',
+                        '&::-webkit-scrollbar': { width: 4 },
+                        '&::-webkit-scrollbar-track': { bgcolor: 'transparent' },
+                        '&::-webkit-scrollbar-thumb': { bgcolor: 'grey.300', borderRadius: 2, '&:hover': { bgcolor: 'grey.400' } },
+                      }}>
+                        <DndContext
+                          sensors={sensors}
+                          collisionDetection={closestCenter}
+                          onDragEnd={({ active, over }) => {
+                            if (over && active.id !== over.id) {
+                              handleReorder(activeDay.id, active.id, over.id, activeDay.locations);
+                            }
+                          }}
+                        >
+                          <SortableContext
+                            items={activeDay.locations.map((l) => l.id)}
+                            strategy={verticalListSortingStrategy}
+                          >
+                            <List dense disablePadding>
+                              {activeDay.locations.map((loc, index) => (
+                                <SortableLocationItem
+                                  key={loc.id}
+                                  loc={loc}
+                                  index={index}
+                                  dayId={activeDay.id}
+                                  onDelete={handleDeleteLocation}
+                                  onEdit={setEditingLoc}
+                                  deleteLoading={deleteLoading}
+                                  canEdit={isOwner || true}
+                                  selectedLocId={selectedLocId}
+                                  onSelectLoc={handleSelectLoc}
+                                />
+                              ))}
+                            </List>
+                          </SortableContext>
+                        </DndContext>
+                      </Box>
+                    ) : (
+                      <Box sx={{ py: 5, textAlign: 'center' }}>
+                        <LocationOnIcon sx={{ fontSize: 36, color: 'grey.200', mb: 1 }} />
+                        <Typography variant="body2" color="text.disabled">
+                          이 날짜에 등록된 장소가 없습니다
+                        </Typography>
+                      </Box>
+                    )}
+                  </Paper>
 
-              {/* 우측: 지도 + 장소 이미지 갤러리 */}
-              <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <Box>
-                  <Typography variant="subtitle1" fontWeight="bold" gutterBottom>경로 지도</Typography>
-                  <TripMap
-                    key={activeDay.id}
-                    locations={activeDay.locations || []}
-                    onLocationSelect={handleMapPinClick}
+                  <AddLocationForm
+                    tripId={id}
+                    dayId={activeDay.id}
+                    onLocationAdded={(payload) => handleAddLocation(activeDay.id, payload)}
+                    existingCount={activeDay.locations?.length || 0}
                   />
                 </Box>
 
-                <LocationGalleryPanel
-                  locations={activeDay.locations || []}
-                  selectedLocId={selectedLocId}
-                  canEdit={isOwner || true}
-                  onImageUploaded={handleImageUploaded}
-                  onImageDeleted={handleImageDeleted}
-                />
+                {/* 우측: 지도 */}
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Paper
+                    elevation={0}
+                    sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}
+                  >
+                    <Box sx={{
+                      px: 2, py: 1.25,
+                      display: 'flex', alignItems: 'center', gap: 1,
+                      background: 'linear-gradient(90deg, #f0f4ff 0%, #e8eeff 100%)',
+                      borderBottom: '1px solid', borderColor: 'divider',
+                    }}>
+                      <Typography variant="subtitle2" fontWeight="bold" color="primary.dark">경로 지도</Typography>
+                      <Typography variant="caption" color="text.disabled" sx={{ ml: 'auto' }}>
+                        핀을 눌러 사진 보기
+                      </Typography>
+                    </Box>
+                    <TripMap
+                      key={activeDay.id}
+                      locations={activeDay.locations || []}
+                      onLocationSelect={handleMapPinClick}
+                    />
+                  </Paper>
+                </Box>
               </Box>
-            </Box>
+
+              {/* 갤러리 Drawer (레이아웃 외부에 렌더됨) */}
+              <LocationGalleryPanel
+                locations={activeDay.locations || []}
+                selectedLocId={selectedLocId}
+                canEdit={isOwner || true}
+                onImageUploaded={handleImageUploaded}
+                onImageDeleted={handleImageDeleted}
+                onClose={() => setSelectedLocId(null)}
+              />
+            </>
           )}
         </>
       ) : (
