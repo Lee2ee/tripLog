@@ -4,6 +4,7 @@ import {
   Alert, Divider, MenuItem, Chip, ToggleButtonGroup, ToggleButton, Tooltip,
   Autocomplete,
 } from '@mui/material';
+import { searchPlaces } from '../../api/placeSearch';
 import AddLocationAltIcon from '@mui/icons-material/AddLocationAlt';
 import SearchIcon from '@mui/icons-material/Search';
 import PinDropIcon from '@mui/icons-material/PinDrop';
@@ -84,11 +85,8 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
     const timer = setTimeout(async () => {
       setSearchLoading(true);
       try {
-        const res = await fetch(
-          `https://photon.komoot.io/api/?q=${encodeURIComponent(searchInput)}&limit=6`
-        );
-        const data = await res.json();
-        setSearchOptions(data.features || []);
+        const results = await searchPlaces(searchInput);
+        setSearchOptions(results);
       } catch {
         setSearchOptions([]);
       } finally {
@@ -188,11 +186,7 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
           {inputMode === 'search' && <Autocomplete
             key={acKey}
             options={searchOptions}
-            getOptionLabel={(opt) => {
-              if (typeof opt === 'string') return opt;
-              const p = opt.properties;
-              return [p.name, p.city, p.country].filter(Boolean).join(', ');
-            }}
+            getOptionLabel={(opt) => typeof opt === 'string' ? opt : opt.name || ''}
             filterOptions={(x) => x}
             loading={searchLoading}
             noOptionsText={searchInput.length < 2 ? '2글자 이상 입력하세요' : '검색 결과 없음'}
@@ -201,27 +195,22 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
             }}
             onChange={(_, opt) => {
               if (!opt) { setPin(null); setName(''); return; }
-              const [lng, lat] = opt.geometry.coordinates;
-              setPin({ lat, lng });
-              setName(opt.properties.name || '');
+              setPin({ lat: opt.lat, lng: opt.lng });
+              setName(opt.name);
               setPinError('');
               setNameError('');
             }}
-            renderOption={(props, opt) => {
-              const p = opt.properties;
-              const detail = [p.city, p.state, p.country].filter(Boolean).join(', ');
-              return (
-                <li {...props} key={`${p.osm_id}-${p.osm_type}`}>
-                  <Box sx={{ overflow: 'hidden', width: '100%' }}>
-                    <Typography variant="body2" fontWeight={500}>{p.name}</Typography>
-                    <Typography variant="caption" color="text.secondary"
-                      sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {detail}
-                    </Typography>
-                  </Box>
-                </li>
-              );
-            }}
+            renderOption={(props, opt) => (
+              <li {...props} key={opt.id}>
+                <Box sx={{ overflow: 'hidden', width: '100%' }}>
+                  <Typography variant="body2" fontWeight={500}>{opt.name}</Typography>
+                  <Typography variant="caption" color="text.secondary"
+                    sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {opt.detail}
+                  </Typography>
+                </Box>
+              </li>
+            )}
             renderInput={(params) => (
               <TextField
                 {...params}

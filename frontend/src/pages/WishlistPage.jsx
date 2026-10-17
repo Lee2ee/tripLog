@@ -6,6 +6,7 @@ import {
   TextField, Tooltip, Chip, Snackbar, Autocomplete,
 } from '@mui/material';
 import axiosInstance from '../api/axios';
+import { searchPlaces } from '../api/placeSearch';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
@@ -37,11 +38,8 @@ const WishlistPage = () => {
     const timer = setTimeout(async () => {
       setSearchLoading(true);
       try {
-        const res = await fetch(
-          `https://photon.komoot.io/api/?q=${encodeURIComponent(searchInput)}&limit=6`
-        );
-        const data = await res.json();
-        setSearchOptions(data.features || []);
+        const results = await searchPlaces(searchInput);
+        setSearchOptions(results);
       } catch {
         setSearchOptions([]);
       } finally {
@@ -201,11 +199,7 @@ const WishlistPage = () => {
             <Autocomplete
               key={acKey}
               options={searchOptions}
-              getOptionLabel={(opt) => {
-                if (typeof opt === 'string') return opt;
-                const p = opt.properties;
-                return [p.name, p.city, p.country].filter(Boolean).join(', ');
-              }}
+              getOptionLabel={(opt) => typeof opt === 'string' ? opt : opt.name || ''}
               filterOptions={(x) => x}
               loading={searchLoading}
               noOptionsText={searchInput.length < 2 ? '2글자 이상 입력하세요' : '검색 결과 없음'}
@@ -214,33 +208,26 @@ const WishlistPage = () => {
               }}
               onChange={(_, opt) => {
                 if (!opt) { setForm((prev) => ({ ...prev, name: '', latitude: '', longitude: '', address: '' })); return; }
-                const p = opt.properties;
-                const [lng, lat] = opt.geometry.coordinates;
-                const address = [p.street, p.city, p.state, p.country].filter(Boolean).join(', ');
                 setForm((prev) => ({
                   ...prev,
-                  name: p.name || '',
-                  latitude: lat,
-                  longitude: lng,
-                  address,
+                  name: opt.name,
+                  latitude: opt.lat,
+                  longitude: opt.lng,
+                  address: opt.detail,
                 }));
                 setFormErrors((prev) => ({ ...prev, name: '', latitude: '' }));
               }}
-              renderOption={(props, opt) => {
-                const p = opt.properties;
-                const detail = [p.city, p.state, p.country].filter(Boolean).join(', ');
-                return (
-                  <li {...props} key={`${p.osm_id}-${p.osm_type}`}>
-                    <Box sx={{ overflow: 'hidden', width: '100%' }}>
-                      <Typography variant="body2" fontWeight={500}>{p.name}</Typography>
-                      <Typography variant="caption" color="text.secondary"
-                        sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {detail}
-                      </Typography>
-                    </Box>
-                  </li>
-                );
-              }}
+              renderOption={(props, opt) => (
+                <li {...props} key={opt.id}>
+                  <Box sx={{ overflow: 'hidden', width: '100%' }}>
+                    <Typography variant="body2" fontWeight={500}>{opt.name}</Typography>
+                    <Typography variant="caption" color="text.secondary"
+                      sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {opt.detail}
+                    </Typography>
+                  </Box>
+                </li>
+              )}
               renderInput={(params) => (
                 <TextField
                   {...params}
