@@ -38,11 +38,10 @@ const WishlistPage = () => {
       setSearchLoading(true);
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchInput)}&format=json&limit=5&addressdetails=1`,
-          { headers: { 'Accept-Language': 'ko' } }
+          `https://photon.komoot.io/api/?q=${encodeURIComponent(searchInput)}&limit=6&lang=ko`
         );
         const data = await res.json();
-        setSearchOptions(data);
+        setSearchOptions(data.features || []);
       } catch {
         setSearchOptions([]);
       } finally {
@@ -202,7 +201,11 @@ const WishlistPage = () => {
             <Autocomplete
               key={acKey}
               options={searchOptions}
-              getOptionLabel={(opt) => typeof opt === 'string' ? opt : opt.display_name || ''}
+              getOptionLabel={(opt) => {
+                if (typeof opt === 'string') return opt;
+                const p = opt.properties;
+                return [p.name, p.city, p.country].filter(Boolean).join(', ');
+              }}
               filterOptions={(x) => x}
               loading={searchLoading}
               noOptionsText={searchInput.length < 2 ? '2글자 이상 입력하세요' : '검색 결과 없음'}
@@ -211,28 +214,33 @@ const WishlistPage = () => {
               }}
               onChange={(_, opt) => {
                 if (!opt) { setForm((prev) => ({ ...prev, name: '', latitude: '', longitude: '', address: '' })); return; }
+                const p = opt.properties;
+                const [lng, lat] = opt.geometry.coordinates;
+                const address = [p.street, p.city, p.state, p.country].filter(Boolean).join(', ');
                 setForm((prev) => ({
                   ...prev,
-                  name: opt.name || opt.display_name.split(',')[0].trim(),
-                  latitude: opt.lat,
-                  longitude: opt.lon,
-                  address: opt.display_name,
+                  name: p.name || '',
+                  latitude: lat,
+                  longitude: lng,
+                  address,
                 }));
                 setFormErrors((prev) => ({ ...prev, name: '', latitude: '' }));
               }}
-              renderOption={(props, opt) => (
-                <li {...props} key={opt.place_id}>
-                  <Box sx={{ overflow: 'hidden', width: '100%' }}>
-                    <Typography variant="body2" fontWeight={500}>
-                      {opt.name || opt.display_name.split(',')[0].trim()}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary"
-                      sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {opt.display_name}
-                    </Typography>
-                  </Box>
-                </li>
-              )}
+              renderOption={(props, opt) => {
+                const p = opt.properties;
+                const detail = [p.city, p.state, p.country].filter(Boolean).join(', ');
+                return (
+                  <li {...props} key={`${p.osm_id}-${p.osm_type}`}>
+                    <Box sx={{ overflow: 'hidden', width: '100%' }}>
+                      <Typography variant="body2" fontWeight={500}>{p.name}</Typography>
+                      <Typography variant="caption" color="text.secondary"
+                        sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {detail}
+                      </Typography>
+                    </Box>
+                  </li>
+                );
+              }}
               renderInput={(params) => (
                 <TextField
                   {...params}

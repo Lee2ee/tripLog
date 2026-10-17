@@ -54,11 +54,10 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
       setSearchLoading(true);
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchInput)}&format=json&limit=5`,
-          { headers: { 'Accept-Language': 'ko' } }
+          `https://photon.komoot.io/api/?q=${encodeURIComponent(searchInput)}&limit=6&lang=ko`
         );
         const data = await res.json();
-        setSearchOptions(data);
+        setSearchOptions(data.features || []);
       } catch {
         setSearchOptions([]);
       } finally {
@@ -121,7 +120,11 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
           <Autocomplete
             key={acKey}
             options={searchOptions}
-            getOptionLabel={(opt) => typeof opt === 'string' ? opt : opt.display_name || ''}
+            getOptionLabel={(opt) => {
+              if (typeof opt === 'string') return opt;
+              const p = opt.properties;
+              return [p.name, p.city, p.country].filter(Boolean).join(', ');
+            }}
             filterOptions={(x) => x}
             loading={searchLoading}
             noOptionsText={searchInput.length < 2 ? '2글자 이상 입력하세요' : '검색 결과 없음'}
@@ -130,24 +133,27 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
             }}
             onChange={(_, opt) => {
               if (!opt) { setPin(null); setName(''); return; }
-              setPin({ lat: parseFloat(opt.lat), lng: parseFloat(opt.lon) });
-              setName(opt.name || opt.display_name.split(',')[0].trim());
+              const [lng, lat] = opt.geometry.coordinates;
+              setPin({ lat, lng });
+              setName(opt.properties.name || '');
               setPinError('');
               setNameError('');
             }}
-            renderOption={(props, opt) => (
-              <li {...props} key={opt.place_id}>
-                <Box sx={{ overflow: 'hidden', width: '100%' }}>
-                  <Typography variant="body2" fontWeight={500}>
-                    {opt.name || opt.display_name.split(',')[0].trim()}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary"
-                    sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {opt.display_name}
-                  </Typography>
-                </Box>
-              </li>
-            )}
+            renderOption={(props, opt) => {
+              const p = opt.properties;
+              const detail = [p.city, p.state, p.country].filter(Boolean).join(', ');
+              return (
+                <li {...props} key={`${p.osm_id}-${p.osm_type}`}>
+                  <Box sx={{ overflow: 'hidden', width: '100%' }}>
+                    <Typography variant="body2" fontWeight={500}>{p.name}</Typography>
+                    <Typography variant="caption" color="text.secondary"
+                      sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {detail}
+                    </Typography>
+                  </Box>
+                </li>
+              );
+            }}
             renderInput={(params) => (
               <TextField
                 {...params}
