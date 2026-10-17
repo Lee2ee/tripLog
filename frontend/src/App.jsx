@@ -14,13 +14,19 @@ import PublicTripsPage from './pages/PublicTripsPage';
 import PublicTripDetailPage from './pages/PublicTripDetailPage';
 import ProfilePage from './pages/ProfilePage';
 import WishlistPage from './pages/WishlistPage';
+import PrivacyPage from './pages/PrivacyPage';
 import { Box } from '@mui/material';
 import { flushTrackingQueue } from './utils/mapsUsageTracker';
 import { isAuthenticated } from './store/authStore';
 
 const App = () => {
-  // 인증된 사용자 진입 시 미전송 추적 큐 플러시
   useEffect(() => {
+    // Render 수면 해제: 앱 진입 시 백엔드 미리 깨우기
+    const apiUrl = import.meta.env.VITE_API_URL;
+    if (apiUrl) {
+      fetch(`${apiUrl}/api/auth/health`).catch(() => {});
+    }
+    // 인증된 사용자 진입 시 미전송 추적 큐 플러시
     if (isAuthenticated()) flushTrackingQueue();
   }, []);
 
@@ -83,6 +89,7 @@ const App = () => {
               </AdminRoute>
             }
           />
+          <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Box>

@@ -30,6 +30,7 @@ const WishlistPage = () => {
   const [snackbar, setSnackbar] = useState('');
 
   const [autocompleteRef, setAutocompleteRef] = useState(null);
+  const [acKey, setAcKey] = useState(0);
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
@@ -123,7 +124,7 @@ const WishlistPage = () => {
     <Container maxWidth="sm" sx={{ py: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5" fontWeight="bold">위시리스트</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setForm(EMPTY_FORM); setFormErrors({}); setDialogOpen(true); }}>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setForm(EMPTY_FORM); setFormErrors({}); setAcKey((k) => k + 1); setDialogOpen(true); }}>
           장소 추가
         </Button>
       </Box>
@@ -194,14 +195,15 @@ const WishlistPage = () => {
             {formErrors.submit && <Alert severity="error">{formErrors.submit}</Alert>}
             {isLoaded ? (
               <Autocomplete
+                key={acKey}
                 onLoad={setAutocompleteRef}
                 onPlaceChanged={handlePlaceSelected}
+                options={{ fields: ['name', 'geometry', 'formatted_address'] }}
               >
                 <TextField
                   label="장소 검색"
                   fullWidth
                   size="small"
-                  value={form.name}
                   onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
                   error={!!formErrors.name}
                   helperText={formErrors.name}

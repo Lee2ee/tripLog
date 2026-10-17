@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   AppBar, Toolbar, Typography, Button, Box, IconButton,
   Badge, Popover, List, ListItem, ListItemText, Divider, Tooltip,
+  Drawer, ListItemButton, ListItemIcon, Avatar,
 } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { logout, isAuthenticated, isAdmin, getUser } from '../../store/authStore';
@@ -15,6 +16,9 @@ import PublicIcon from '@mui/icons-material/Public';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import MenuIcon from '@mui/icons-material/Menu';
+import FlightTakeoffIcon from '@mui/icons-material/FlightTakeoff';
+import CompassCalibrateIcon from '@mui/icons-material/CompassCalibrate';
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -26,6 +30,7 @@ const Navbar = () => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifAnchor, setNotifAnchor] = useState(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const pollRef = useRef(null);
 
   const fetchUnreadCount = async () => {
@@ -72,129 +77,167 @@ const Navbar = () => {
 
   const handleLogout = () => {
     logout();
+    setDrawerOpen(false);
     navigate(admin ? '/admin/login' : '/login');
   };
 
   const isActive = (path) => location.pathname === path;
 
-  const navBtnStyle = (path) => ({
-    whiteSpace: 'nowrap',
-    fontWeight: isActive(path) ? 'bold' : 'normal',
-    borderBottom: isActive(path) ? '2px solid white' : '2px solid transparent',
-    borderRadius: 0,
-    px: 1.5,
-  });
+  const navItems = [
+    { label: '탐색', path: '/explore', icon: <PublicIcon /> },
+    ...(authenticated ? [
+      { label: '내 여행', path: '/trips', icon: <FlightTakeoffIcon /> },
+      { label: '갤러리', path: '/gallery', icon: <PhotoLibraryIcon /> },
+      ...(!admin ? [{ label: '위시리스트', path: '/wishlist', icon: <BookmarkIcon /> }] : []),
+      ...(admin ? [{ label: '관리자', path: '/admin', icon: <AdminPanelSettingsIcon />, admin: true }] : []),
+    ] : []),
+  ];
+
+  const handleNavDrawer = (path) => {
+    navigate(path);
+    setDrawerOpen(false);
+  };
+
+  const userInitial = user?.nickname?.[0]?.toUpperCase() || '?';
 
   return (
-    <AppBar position="sticky" elevation={2}>
-      <Toolbar>
+    <AppBar
+      position="sticky"
+      elevation={0}
+      sx={{
+        bgcolor: '#FFFFFF',
+        color: 'text.primary',
+        borderBottom: '1px solid',
+        borderColor: 'divider',
+      }}
+    >
+      <Toolbar sx={{ gap: 0.5 }}>
+        {/* 모바일 햄버거 */}
         <IconButton
-          color="inherit"
-          onClick={() => navigate('/')}
-          sx={{ mr: 1 }}
+          onClick={() => setDrawerOpen(true)}
+          sx={{ mr: 0.5, display: { md: 'none' }, color: 'text.primary' }}
         >
-          <ExploreIcon />
+          <MenuIcon />
         </IconButton>
-        <Typography
-          variant="h6"
-          component="div"
-          sx={{ cursor: 'pointer', fontWeight: 'bold', mr: 3, whiteSpace: 'nowrap' }}
-          onClick={() => navigate('/')}
-        >
-          TripLog
-        </Typography>
 
-        <Box sx={{ display: 'flex', gap: 0.5, flexGrow: 1 }}>
-          <Button
-            color="inherit"
-            startIcon={<PublicIcon />}
-            onClick={() => navigate('/explore')}
-            sx={navBtnStyle('/explore')}
+        {/* 로고 */}
+        <Box
+          onClick={() => navigate('/')}
+          sx={{
+            display: 'flex', alignItems: 'center', gap: 0.75,
+            cursor: 'pointer', mr: 3,
+            '&:hover': { opacity: 0.85 },
+            transition: 'opacity 0.15s',
+          }}
+        >
+          <CompassCalibrateIcon sx={{ color: 'secondary.main', fontSize: 26 }} />
+          <Typography
+            variant="h6"
+            fontWeight={800}
+            sx={{ color: 'primary.main', letterSpacing: '-0.5px', whiteSpace: 'nowrap' }}
           >
-            탐색
-          </Button>
-          {authenticated && (
-            <>
-            <Button
-              color="inherit"
-              onClick={() => navigate('/trips')}
-              sx={navBtnStyle('/trips')}
-            >
-              내 여행
-            </Button>
-            <Button
-              color="inherit"
-              startIcon={<PhotoLibraryIcon />}
-              onClick={() => navigate('/gallery')}
-              sx={navBtnStyle('/gallery')}
-            >
-              갤러리
-            </Button>
-            {!admin && (
-              <Button
-                color="inherit"
-                startIcon={<BookmarkIcon />}
-                onClick={() => navigate('/wishlist')}
-                sx={navBtnStyle('/wishlist')}
-              >
-                위시리스트
-              </Button>
-            )}
-            {admin && (
-              <Button
-                color="inherit"
-                startIcon={<AdminPanelSettingsIcon />}
-                onClick={() => navigate('/admin')}
-                sx={{
-                  ...navBtnStyle('/admin'),
-                  color: isActive('/admin') ? 'white' : '#ffcc80',
-                }}
-              >
-                관리자
-              </Button>
-            )}
-            </>
-          )}
+            TripLog
+          </Typography>
         </Box>
 
+        {/* 데스크탑 네비게이션 */}
+        <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 0.25, flexGrow: 1 }}>
+          {navItems.map((item) => (
+            <Button
+              key={item.path}
+              onClick={() => navigate(item.path)}
+              sx={{
+                color: item.admin ? 'warning.dark' : isActive(item.path) ? 'primary.main' : 'text.secondary',
+                fontWeight: isActive(item.path) ? 700 : 500,
+                px: 1.5,
+                py: 0.75,
+                borderRadius: 2,
+                position: 'relative',
+                '&::after': {
+                  content: '""',
+                  position: 'absolute',
+                  bottom: 4,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: isActive(item.path) ? '60%' : '0%',
+                  height: 2,
+                  bgcolor: 'secondary.main',
+                  borderRadius: 1,
+                  transition: 'width 0.2s',
+                },
+                '&:hover': {
+                  bgcolor: 'transparent',
+                  color: 'primary.main',
+                  '&::after': { width: '60%' },
+                },
+              }}
+              startIcon={React.cloneElement(item.icon, { sx: { fontSize: '16px !important' } })}
+            >
+              {item.label}
+            </Button>
+          ))}
+        </Box>
+
+        <Box sx={{ flexGrow: { xs: 1, md: 0 } }} />
+
+        {/* 우측 액션 */}
         {authenticated ? (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
-            {!admin && (
-              <Tooltip title="내 프로필">
-                <Button
-                  color="inherit"
-                  startIcon={<AccountCircleIcon />}
-                  onClick={() => navigate('/profile')}
-                  size="small"
-                  sx={{ whiteSpace: 'nowrap', display: { xs: 'none', sm: 'flex' } }}
-                >
-                  {user?.nickname}
-                </Button>
-              </Tooltip>
-            )}
-            {admin && (
-              <Typography
-                variant="body2"
-                sx={{ opacity: 0.9, whiteSpace: 'nowrap', display: { xs: 'none', sm: 'block' } }}
-              >
-                {user?.nickname}
-              </Typography>
-            )}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexShrink: 0 }}>
             {!admin && (
               <Tooltip title="알림">
-                <IconButton color="inherit" onClick={handleOpenNotif} size="small">
+                <IconButton onClick={handleOpenNotif} size="small" sx={{ color: 'text.secondary' }}>
                   <Badge badgeContent={unreadCount} color="error" max={99}>
-                    <NotificationsIcon />
+                    <NotificationsIcon fontSize="small" />
                   </Badge>
                 </IconButton>
               </Tooltip>
             )}
+            {!admin && (
+              <Tooltip title={`${user?.nickname} 프로필`}>
+                <Box
+                  onClick={() => navigate('/profile')}
+                  sx={{
+                    display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1,
+                    cursor: 'pointer', px: 1.25, py: 0.5, borderRadius: 6,
+                    border: '1.5px solid', borderColor: 'divider',
+                    '&:hover': { borderColor: 'primary.main', bgcolor: 'primary.50' },
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <Avatar
+                    sx={{ width: 26, height: 26, bgcolor: 'primary.main', fontSize: 13, fontWeight: 700 }}
+                  >
+                    {userInitial}
+                  </Avatar>
+                  <Typography variant="body2" fontWeight={500} color="text.primary" sx={{ whiteSpace: 'nowrap' }}>
+                    {user?.nickname}
+                  </Typography>
+                </Box>
+              </Tooltip>
+            )}
+            {admin && (
+              <Typography variant="body2" sx={{ opacity: 0.8, display: { xs: 'none', sm: 'block' }, color: 'text.primary' }}>
+                {user?.nickname}
+              </Typography>
+            )}
+            <Tooltip title="로그아웃">
+              <IconButton
+                onClick={handleLogout}
+                size="small"
+                sx={{ color: 'text.secondary', display: { xs: 'flex', md: 'none' } }}
+              >
+                <LogoutIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
             <Button
-              color="inherit"
-              startIcon={<LogoutIcon />}
-              onClick={handleLogout}
+              variant="outlined"
               size="small"
-              sx={{ whiteSpace: 'nowrap' }}
+              onClick={handleLogout}
+              sx={{
+                display: { xs: 'none', md: 'flex' },
+                color: 'text.secondary', borderColor: 'divider',
+                '&:hover': { borderColor: 'text.secondary', bgcolor: 'transparent' },
+              }}
             >
               로그아웃
             </Button>
@@ -202,16 +245,98 @@ const Navbar = () => {
         ) : (
           <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
             <Button
-              color="inherit"
-              startIcon={<LoginIcon />}
+              variant="contained"
+              size="small"
               onClick={() => navigate('/login')}
-              sx={{ whiteSpace: 'nowrap' }}
+              sx={{ borderRadius: 6, px: 2 }}
+              startIcon={<LoginIcon fontSize="small" />}
             >
               로그인
             </Button>
           </Box>
         )}
       </Toolbar>
+
+      {/* 모바일 드로어 */}
+      <Drawer
+        anchor="left"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        PaperProps={{ sx: { width: 260, bgcolor: '#FDFCF8' } }}
+      >
+        {/* 드로어 헤더 */}
+        <Box sx={{
+          p: 3,
+          background: 'linear-gradient(135deg, #1A3A5C 0%, #2C6BAD 100%)',
+          color: 'white',
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: authenticated ? 2 : 0 }}>
+            <CompassCalibrateIcon sx={{ fontSize: 22, color: '#F4A261' }} />
+            <Typography variant="h6" fontWeight={800}>TripLog</Typography>
+          </Box>
+          {authenticated && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Avatar sx={{ width: 36, height: 36, bgcolor: 'rgba(255,255,255,0.2)', fontSize: 16, fontWeight: 700, border: '2px solid rgba(255,255,255,0.4)' }}>
+                {userInitial}
+              </Avatar>
+              <Box>
+                <Typography variant="body2" fontWeight={700}>{user?.nickname}</Typography>
+                <Typography variant="caption" sx={{ opacity: 0.75 }}>{user?.email}</Typography>
+              </Box>
+            </Box>
+          )}
+        </Box>
+
+        <Divider />
+        <List sx={{ flexGrow: 1, py: 1 }}>
+          {navItems.map((item) => (
+            <ListItemButton
+              key={item.path}
+              onClick={() => handleNavDrawer(item.path)}
+              selected={isActive(item.path)}
+              sx={{
+                borderRadius: 2, mx: 1, mb: 0.25,
+                color: item.admin ? 'warning.dark' : 'text.primary',
+                '&.Mui-selected': {
+                  bgcolor: 'primary.50',
+                  color: 'primary.main',
+                  '& .MuiListItemIcon-root': { color: 'primary.main' },
+                },
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 36, color: item.admin ? 'warning.dark' : 'text.secondary' }}>
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText
+                primary={item.label}
+                primaryTypographyProps={{ fontWeight: isActive(item.path) ? 700 : 500, fontSize: '0.9rem' }}
+              />
+            </ListItemButton>
+          ))}
+        </List>
+        <Divider />
+        <List sx={{ py: 1 }}>
+          {authenticated ? (
+            <>
+              {!admin && (
+                <ListItemButton onClick={() => handleNavDrawer('/profile')} sx={{ borderRadius: 2, mx: 1 }}>
+                  <ListItemIcon sx={{ minWidth: 36, color: 'text.secondary' }}><AccountCircleIcon /></ListItemIcon>
+                  <ListItemText primary="내 프로필" primaryTypographyProps={{ fontSize: '0.9rem' }} />
+                </ListItemButton>
+              )}
+              <ListItemButton onClick={handleLogout} sx={{ borderRadius: 2, mx: 1, color: 'error.main' }}>
+                <ListItemIcon sx={{ minWidth: 36, color: 'error.main' }}><LogoutIcon /></ListItemIcon>
+                <ListItemText primary="로그아웃" primaryTypographyProps={{ fontSize: '0.9rem' }} />
+              </ListItemButton>
+            </>
+          ) : (
+            <ListItemButton onClick={() => handleNavDrawer('/login')} sx={{ borderRadius: 2, mx: 1 }}>
+              <ListItemIcon sx={{ minWidth: 36 }}><LoginIcon /></ListItemIcon>
+              <ListItemText primary="로그인" primaryTypographyProps={{ fontSize: '0.9rem' }} />
+            </ListItemButton>
+          )}
+        </List>
+      </Drawer>
 
       {/* 알림 팝오버 */}
       <Popover
@@ -220,19 +345,28 @@ const Navbar = () => {
         onClose={handleCloseNotif}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        PaperProps={{ sx: { width: 320, maxHeight: 400 } }}
+        PaperProps={{
+          sx: {
+            width: { xs: 'calc(100vw - 32px)', sm: 320 },
+            maxHeight: 400,
+            borderRadius: 2,
+            boxShadow: 3,
+            mt: 0.5,
+          },
+        }}
       >
         <Box sx={{ px: 2, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="subtitle2" fontWeight="bold">알림</Typography>
+          <Typography variant="subtitle2" fontWeight={700}>알림</Typography>
           {unreadCount > 0 && (
-            <Button size="small" onClick={handleMarkAllRead} sx={{ fontSize: '0.75rem' }}>
+            <Button size="small" onClick={handleMarkAllRead} sx={{ fontSize: '0.75rem', color: 'secondary.main' }}>
               모두 읽음
             </Button>
           )}
         </Box>
         <Divider />
         {notifications.length === 0 ? (
-          <Box sx={{ p: 3, textAlign: 'center' }}>
+          <Box sx={{ p: 4, textAlign: 'center' }}>
+            <NotificationsIcon sx={{ fontSize: 32, color: 'grey.300', mb: 1 }} />
             <Typography variant="body2" color="text.secondary">알림이 없습니다</Typography>
           </Box>
         ) : (
@@ -243,12 +377,12 @@ const Navbar = () => {
                 <ListItem
                   button
                   onClick={() => handleClickNotif(notif)}
-                  sx={{ bgcolor: notif.isRead ? 'transparent' : 'action.hover', cursor: 'pointer', px: 2, py: 1 }}
+                  sx={{ bgcolor: notif.isRead ? 'transparent' : 'primary.50', cursor: 'pointer', px: 2, py: 1 }}
                 >
                   <ListItemText
                     primary={notif.message}
                     secondary={new Date(notif.createdAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: notif.isRead ? 'normal' : 'bold' }}
+                    primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: notif.isRead ? 'normal' : 700 }}
                     secondaryTypographyProps={{ fontSize: '0.75rem' }}
                   />
                 </ListItem>

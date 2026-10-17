@@ -8,7 +8,7 @@ import { trackApiCall } from '../../utils/mapsUsageTracker';
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 const LIBRARIES = ['places'];
 const KOREA_CENTER = { lat: 36.5, lng: 127.5 };
-const containerStyle = { width: '100%', height: '450px', borderRadius: '8px' };
+const containerStyle = { width: '100%', height: '100%', borderRadius: '8px' };
 const MAP_OPTIONS = {
   streetViewControl: false,
   mapTypeControl: false,
@@ -16,8 +16,6 @@ const MAP_OPTIONS = {
   zoomControl: true,
 };
 
-// Directions API는 세그먼트 수가 이 값 이하일 때만 호출
-const MAX_DIRECTIONS_SEGMENTS = 5;
 
 const MODE_COLOR = {
   DRIVING:   '#1976d2',
@@ -145,37 +143,51 @@ const TripMap = ({ locations = [], onLocationSelect, readOnly = false }) => {
       return;
     }
 
-    const gen = ++fetchGenRef.current;
-    const segments = locs.slice(1).map((dest, i) => ({
-      origin: locs[i],
-      dest,
-      mode: dest.transportMode || 'DRIVING',
-    }));
-
-    // ① readOnly이거나 세그먼트 수 초과 → 직선만 표시, Directions API 호출 안 함
-    if (readOnly || segments.length > MAX_DIRECTIONS_SEGMENTS) {
+    // readOnly → 직선만 표시
+    if (readOnly) {
       drawStraightLines(mapInstance, locs, fallbackPolysRef);
-      setRouteDistance(null); // 직선 거리는 하단 straightDistance로 표시
+      setRouteDistance(null);
       return;
     }
 
-    // ② 경로 미요청 상태 → 마커만 표시
+    // 경로 미요청 상태 → 마커만 표시
     if (!routeRequestedRef.current) return;
 
-    // ③ Directions API 호출
+    // 연속된 동일 이동수단 세그먼트를 그룹화 → waypoints로 묶어 API 호출 횟수 최소화
+    // (구글 무료 한도: 경유지 최대 8개 = 출발+경유8+도착 총 10개)
+    const groups = [];
+    let groupOriginIdx = 0;
+    for (let i = 1; i < locs.length; i++) {
+      const mode = locs[i].transportMode || 'DRIVING';
+      const isLastInGroup =
+        i === locs.length - 1 ||
+        (locs[i + 1]?.transportMode || 'DRIVING') !== mode ||
+        i - groupOriginIdx >= 9;
+      if (isLastInGroup) {
+        groups.push({ mode, stops: locs.slice(groupOriginIdx, i + 1) });
+        groupOriginIdx = i;
+      }
+    }
+
+    const gen = ++fetchGenRef.current;
     setRouteLoading(true);
     const service = new window.google.maps.DirectionsService();
     let completed = 0;
     let totalMeters = 0;
     let hasError = false;
 
-    segments.forEach(({ origin, dest, mode }) => {
+    groups.forEach(({ mode, stops }) => {
       const color = getModeColor(mode);
       service.route(
         {
-          origin: { lat: origin.latitude, lng: origin.longitude },
-          destination: { lat: dest.latitude, lng: dest.longitude },
+          origin: { lat: stops[0].latitude, lng: stops[0].longitude },
+          destination: { lat: stops[stops.length - 1].latitude, lng: stops[stops.length - 1].longitude },
+          waypoints: stops.slice(1, -1).map((s) => ({
+            location: { lat: s.latitude, lng: s.longitude },
+            stopover: true,
+          })),
           travelMode: window.google.maps.TravelMode[mode],
+          optimizeWaypoints: false,
         },
         (result, status) => {
           if (fetchGenRef.current !== gen) return;
@@ -190,28 +202,31 @@ const TripMap = ({ locations = [], onLocationSelect, readOnly = false }) => {
               polylineOptions: { strokeColor: color, strokeOpacity: 0.85, strokeWeight: 5 },
             });
             renderersRef.current.push(renderer);
-            totalMeters += result.routes[0].legs[0].distance.value;
+            result.routes[0].legs.forEach((leg) => { totalMeters += leg.distance.value; });
           } else {
             hasError = true;
-            const poly = new window.google.maps.Polyline({
-              map: mapInstance,
-              path: [
-                { lat: origin.latitude, lng: origin.longitude },
-                { lat: dest.latitude, lng: dest.longitude },
-              ],
-              strokeColor: color,
-              strokeOpacity: 0.5,
-              strokeWeight: 3,
-              geodesic: true,
+            stops.slice(1).forEach((dest, i) => {
+              const origin = stops[i];
+              const poly = new window.google.maps.Polyline({
+                map: mapInstance,
+                path: [
+                  { lat: origin.latitude, lng: origin.longitude },
+                  { lat: dest.latitude, lng: dest.longitude },
+                ],
+                strokeColor: color,
+                strokeOpacity: 0.5,
+                strokeWeight: 3,
+                geodesic: true,
+              });
+              fallbackPolysRef.current.push(poly);
             });
-            fallbackPolysRef.current.push(poly);
           }
 
-          if (completed === segments.length) {
+          if (completed === groups.length) {
             setRouteLoading(false);
             setRouteError(hasError);
             setRouteDistance(totalMeters > 0 ? (totalMeters / 1000).toFixed(1) : null);
-            trackApiCall('DIRECTIONS', segments.length);
+            trackApiCall('DIRECTIONS', groups.length);
           }
         }
       );
@@ -260,8 +275,6 @@ const TripMap = ({ locations = [], onLocationSelect, readOnly = false }) => {
   }, [locations, fetchRoute, handleMarkerClick]);
 
   const straightDistance = calculateTotalDistance(locations);
-  const segmentCount = Math.max(0, locations.length - 1);
-  const isOverThreshold = !readOnly && segmentCount > MAX_DIRECTIONS_SEGMENTS;
 
   const distanceLabel = routeDistance
     ? `총 이동 거리 ${routeDistance} km`
@@ -313,8 +326,8 @@ const TripMap = ({ locations = [], onLocationSelect, readOnly = false }) => {
           </Box>
         )}
 
-        {/* 경로 표시 버튼: readOnly가 아니고 임계값 이하일 때만 표시 */}
-        {!readOnly && !isOverThreshold && locations.length >= 2 && !routeRequested && (
+        {/* 경로 표시 버튼 */}
+        {!readOnly && locations.length >= 2 && !routeRequested && (
           <Button
             size="small"
             variant="outlined"
@@ -334,53 +347,49 @@ const TripMap = ({ locations = [], onLocationSelect, readOnly = false }) => {
           </Typography>
         )}
 
-        {isOverThreshold && (
-          <Typography variant="caption" color="text.secondary">
-            장소가 많아 직선으로 표시합니다 ({segmentCount}/{MAX_DIRECTIONS_SEGMENTS} 구간 초과)
-          </Typography>
-        )}
+
       </Box>
 
       {/* 지도: 뷰포트에 들어올 때만 렌더링 (Intersection Observer) */}
-      {isVisible && isLoaded ? (
-        <GoogleMap
-          mapContainerStyle={containerStyle}
-          center={KOREA_CENTER}
-          zoom={7}
-          options={MAP_OPTIONS}
-          onLoad={onMapLoad}
-          onUnmount={onMapUnmount}
-        >
-          {selectedMarker && (
-            <InfoWindow
-              position={{ lat: selectedMarker.latitude, lng: selectedMarker.longitude }}
-              onCloseClick={() => setSelectedMarker(null)}
-            >
-              <Box>
-                <Typography variant="subtitle2" fontWeight="bold">{selectedMarker.name}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {selectedMarker.latitude.toFixed(6)}, {selectedMarker.longitude.toFixed(6)}
-                </Typography>
-              </Box>
-            </InfoWindow>
-          )}
-        </GoogleMap>
-      ) : (
-        <Box
-          sx={{
-            ...containerStyle,
-            bgcolor: 'grey.100',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          {isLoaded
-            ? <CircularProgress size={24} />   // 로드됐지만 아직 뷰포트 밖
-            : <CircularProgress size={24} />   // SDK 로딩 중
-          }
-        </Box>
-      )}
+      <Box sx={{ width: '100%', height: { xs: 280, sm: 350, md: 420 }, borderRadius: '8px', overflow: 'hidden' }}>
+        {isVisible && isLoaded ? (
+          <GoogleMap
+            mapContainerStyle={containerStyle}
+            center={KOREA_CENTER}
+            zoom={7}
+            options={MAP_OPTIONS}
+            onLoad={onMapLoad}
+            onUnmount={onMapUnmount}
+          >
+            {selectedMarker && (
+              <InfoWindow
+                position={{ lat: selectedMarker.latitude, lng: selectedMarker.longitude }}
+                onCloseClick={() => setSelectedMarker(null)}
+              >
+                <Box>
+                  <Typography variant="subtitle2" fontWeight="bold">{selectedMarker.name}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {selectedMarker.latitude.toFixed(6)}, {selectedMarker.longitude.toFixed(6)}
+                  </Typography>
+                </Box>
+              </InfoWindow>
+            )}
+          </GoogleMap>
+        ) : (
+          <Box
+            sx={{
+              width: '100%',
+              height: '100%',
+              bgcolor: 'grey.100',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <CircularProgress size={24} />
+          </Box>
+        )}
+      </Box>
     </Box>
   );
 };

@@ -190,7 +190,7 @@ const GalleryPage = () => {
         </Paper>
       ) : (
         <>
-          <FormControl sx={{ mb: 3, minWidth: 280 }}>
+          <FormControl sx={{ mb: 3, width: '100%', maxWidth: 400 }}>
             <InputLabel>여행 선택</InputLabel>
             <Select
               value={selectedTripId}
@@ -272,10 +272,9 @@ const GalleryPage = () => {
                   >
                     <CardMedia
                       component="img"
-                      height="200"
                       image={image.imageUrl}
                       alt="여행 사진"
-                      sx={{ objectFit: 'cover' }}
+                      sx={{ objectFit: 'cover', aspectRatio: '1 / 1', width: '100%' }}
                     />
                   </Card>
                 </Grid>
