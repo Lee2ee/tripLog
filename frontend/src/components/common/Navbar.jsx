@@ -18,7 +18,7 @@ import BookmarkIcon from '@mui/icons-material/Bookmark';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import MenuIcon from '@mui/icons-material/Menu';
 import FlightTakeoffIcon from '@mui/icons-material/FlightTakeoff';
-import CompassCalibrateIcon from '@mui/icons-material/CompassCalibrate';
+import CompassCalibrateIcon from '@mui/icons-material/CompassCalibration';
 
 const Navbar = () => {
   const navigate = useNavigate();

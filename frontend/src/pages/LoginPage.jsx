@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Typography, Button, Paper, Alert } from '@mui/material';
 import { useLocation } from 'react-router-dom';
-import CompassCalibrateIcon from '@mui/icons-material/CompassCalibrate';
+import CompassCalibrateIcon from '@mui/icons-material/CompassCalibration';
 import FlightTakeoffIcon from '@mui/icons-material/FlightTakeoff';
 import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
 import RouteIcon from '@mui/icons-material/Route';
