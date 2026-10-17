@@ -1,18 +1,15 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box, TextField, Button, Paper, Typography, CircularProgress,
   Alert, Divider, MenuItem, Chip, ToggleButtonGroup, ToggleButton, Tooltip,
+  Autocomplete,
 } from '@mui/material';
-import { Autocomplete, useJsApiLoader } from '@react-google-maps/api';
-import { trackApiCall } from '../../utils/mapsUsageTracker';
 import AddLocationAltIcon from '@mui/icons-material/AddLocationAlt';
 import SearchIcon from '@mui/icons-material/Search';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import DirectionsWalkIcon from '@mui/icons-material/DirectionsWalk';
 import DirectionsTransitIcon from '@mui/icons-material/DirectionsTransit';
 import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike';
-
-import { GOOGLE_MAPS_API_KEY, LIBRARIES } from '../../api/googleMapsConfig';
 
 const TRANSPORT_MODES = [
   { value: 'DRIVING',   label: '자동차',   icon: <DirectionsCarIcon fontSize="small" />,     color: '#1976d2' },
@@ -31,40 +28,45 @@ const CATEGORIES = [
 ];
 
 const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) => {
-  const autocompleteRef = useRef(null);
   const [acKey, setAcKey] = useState(0);
 
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [memo, setMemo] = useState('');
   const [transportMode, setTransportMode] = useState('DRIVING');
-  const [pin, setPin] = useState(null); // { lat, lng }
+  const [pin, setPin] = useState(null);
   const [nameError, setNameError] = useState('');
   const [pinError, setPinError] = useState('');
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
-    libraries: LIBRARIES,
-    language: 'ko',
-    region: 'KR',
-  });
+  const [searchInput, setSearchInput] = useState('');
+  const [searchOptions, setSearchOptions] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
 
-  const onPlaceChanged = useCallback(() => {
-    const place = autocompleteRef.current?.getPlace();
-    if (!place?.geometry) return;
-
-    const lat = place.geometry.location.lat();
-    const lng = place.geometry.location.lng();
-    setPin({ lat, lng });
-    setName(place.name || '');
-    setPinError('');
-    setNameError('');
-    trackApiCall('PLACES', 1);
-  }, []);
+  useEffect(() => {
+    if (!searchInput.trim() || searchInput.length < 2) {
+      setSearchOptions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchInput)}&format=json&limit=5`,
+          { headers: { 'Accept-Language': 'ko' } }
+        );
+        const data = await res.json();
+        setSearchOptions(data);
+      } catch {
+        setSearchOptions([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -91,6 +93,8 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
       setCategory('');
       setMemo('');
       setPin(null);
+      setSearchInput('');
+      setSearchOptions([]);
       setAcKey((k) => k + 1);
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch (err) {
@@ -114,41 +118,63 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
       <Box component="form" onSubmit={handleSubmit}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
 
-          {/* Google Places 검색 */}
-          {isLoaded ? (
-            <Autocomplete
-              key={acKey}
-              onLoad={(ac) => { autocompleteRef.current = ac; }}
-              onPlaceChanged={onPlaceChanged}
-              options={{ fields: ['name', 'geometry'] }}
-            >
+          <Autocomplete
+            key={acKey}
+            options={searchOptions}
+            getOptionLabel={(opt) => typeof opt === 'string' ? opt : opt.display_name || ''}
+            filterOptions={(x) => x}
+            loading={searchLoading}
+            noOptionsText={searchInput.length < 2 ? '2글자 이상 입력하세요' : '검색 결과 없음'}
+            onInputChange={(_, val, reason) => {
+              if (reason === 'input' || reason === 'clear') setSearchInput(val);
+            }}
+            onChange={(_, opt) => {
+              if (!opt) { setPin(null); setName(''); return; }
+              setPin({ lat: parseFloat(opt.lat), lng: parseFloat(opt.lon) });
+              setName(opt.name || opt.display_name.split(',')[0].trim());
+              setPinError('');
+              setNameError('');
+            }}
+            renderOption={(props, opt) => (
+              <li {...props} key={opt.place_id}>
+                <Box sx={{ overflow: 'hidden', width: '100%' }}>
+                  <Typography variant="body2" fontWeight={500}>
+                    {opt.name || opt.display_name.split(',')[0].trim()}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary"
+                    sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {opt.display_name}
+                  </Typography>
+                </Box>
+              </li>
+            )}
+            renderInput={(params) => (
               <TextField
+                {...params}
                 label="장소 검색"
-                onChange={(e) => { setName(e.target.value); setNameError(''); setPin(null); }}
-                error={!!nameError || !!pinError}
-                helperText={nameError || pinError || 'Google에서 장소를 검색하면 좌표가 자동 입력됩니다'}
                 size="small"
-                fullWidth
-                placeholder="예: 경복궁, 명동 칼국수..."
+                placeholder="예: 경복궁, 에펠탑..."
+                error={!!nameError || !!pinError}
+                helperText={nameError || pinError || '장소를 검색하면 좌표가 자동 입력됩니다'}
                 InputProps={{
-                  startAdornment: <SearchIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} />,
+                  ...params.InputProps,
+                  startAdornment: (
+                    <>
+                      <SearchIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} />
+                      {params.InputProps.startAdornment}
+                    </>
+                  ),
+                  endAdornment: (
+                    <>
+                      {searchLoading ? <CircularProgress size={16} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
                 }}
               />
-            </Autocomplete>
-          ) : (
-            <TextField
-              label="장소 이름"
-              value={name}
-              onChange={(e) => { setName(e.target.value); setNameError(''); }}
-              error={!!nameError}
-              helperText={nameError}
-              size="small"
-              fullWidth
-              placeholder="예: 경복궁"
-            />
-          )}
+            )}
+          />
 
-          {/* 선택된 좌표 표시 */}
           {pin && (
             <Chip
               label={`📌 ${pin.lat.toFixed(5)}, ${pin.lng.toFixed(5)}`}
@@ -159,7 +185,6 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
             />
           )}
 
-          {/* 이동 수단 (두 번째 장소부터) */}
           {existingCount > 0 && (
             <Box>
               <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
@@ -190,7 +215,6 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
             </Box>
           )}
 
-          {/* 카테고리 */}
           <TextField
             select
             label="카테고리 (선택)"
@@ -205,7 +229,6 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0 }) 
             ))}
           </TextField>
 
-          {/* 메모 */}
           <TextField
             label="메모 (선택)"
             value={memo}

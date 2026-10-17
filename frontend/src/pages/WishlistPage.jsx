@@ -3,17 +3,13 @@ import {
   Container, Box, Typography, Paper, CircularProgress, Alert,
   List, ListItem, ListItemText, ListItemSecondaryAction, IconButton,
   Divider, Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, Tooltip, Chip, Snackbar,
+  TextField, Tooltip, Chip, Snackbar, Autocomplete,
 } from '@mui/material';
 import axiosInstance from '../api/axios';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
-import { Autocomplete, useJsApiLoader } from '@react-google-maps/api';
-import { trackApiCall } from '../utils/mapsUsageTracker';
-
-import { GOOGLE_MAPS_API_KEY, LIBRARIES } from '../api/googleMapsConfig';
 
 const EMPTY_FORM = { name: '', latitude: '', longitude: '', address: '', memo: '' };
 
@@ -28,16 +24,33 @@ const WishlistPage = () => {
   const [deletingId, setDeletingId] = useState(null);
   const [snackbar, setSnackbar] = useState('');
 
-  const [autocompleteRef, setAutocompleteRef] = useState(null);
   const [acKey, setAcKey] = useState(0);
+  const [searchInput, setSearchInput] = useState('');
+  const [searchOptions, setSearchOptions] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
 
-  const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
-    libraries: LIBRARIES,
-    language: 'ko',
-    region: 'KR',
-  });
+  useEffect(() => {
+    if (!searchInput.trim() || searchInput.length < 2) {
+      setSearchOptions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchInput)}&format=json&limit=5&addressdetails=1`,
+          { headers: { 'Accept-Language': 'ko' } }
+        );
+        const data = await res.json();
+        setSearchOptions(data);
+      } catch {
+        setSearchOptions([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -53,25 +66,10 @@ const WishlistPage = () => {
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
-  const handlePlaceSelected = () => {
-    if (!autocompleteRef) return;
-    const place = autocompleteRef.getPlace();
-    if (!place.geometry) return;
-    setForm((prev) => ({
-      ...prev,
-      name: place.name || '',
-      latitude: place.geometry.location.lat(),
-      longitude: place.geometry.location.lng(),
-      address: place.formatted_address || '',
-    }));
-    setFormErrors((prev) => ({ ...prev, name: '', latitude: '' }));
-    trackApiCall('PLACES', 1);
-  };
-
   const validate = () => {
     const errors = {};
     if (!form.name.trim()) errors.name = '장소명을 입력하세요.';
-    if (form.latitude === '' || form.longitude === '') errors.latitude = '장소를 검색하거나 좌표를 입력하세요.';
+    if (form.latitude === '' || form.longitude === '') errors.latitude = '장소를 검색하여 선택해주세요.';
     return errors;
   };
 
@@ -112,6 +110,15 @@ const WishlistPage = () => {
     }
   };
 
+  const handleOpenDialog = () => {
+    setForm(EMPTY_FORM);
+    setFormErrors({});
+    setSearchInput('');
+    setSearchOptions([]);
+    setAcKey((k) => k + 1);
+    setDialogOpen(true);
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
     return new Date(dateStr).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
@@ -123,7 +130,7 @@ const WishlistPage = () => {
     <Container maxWidth="sm" sx={{ py: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5" fontWeight="bold">위시리스트</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setForm(EMPTY_FORM); setFormErrors({}); setAcKey((k) => k + 1); setDialogOpen(true); }}>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenDialog}>
           장소 추가
         </Button>
       </Box>
@@ -186,40 +193,68 @@ const WishlistPage = () => {
         </Paper>
       )}
 
-      {/* 추가 다이얼로그 */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>장소 추가</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             {formErrors.submit && <Alert severity="error">{formErrors.submit}</Alert>}
-            {isLoaded ? (
-              <Autocomplete
-                key={acKey}
-                onLoad={setAutocompleteRef}
-                onPlaceChanged={handlePlaceSelected}
-                options={{ fields: ['name', 'geometry', 'formatted_address'] }}
-              >
+
+            <Autocomplete
+              key={acKey}
+              options={searchOptions}
+              getOptionLabel={(opt) => typeof opt === 'string' ? opt : opt.display_name || ''}
+              filterOptions={(x) => x}
+              loading={searchLoading}
+              noOptionsText={searchInput.length < 2 ? '2글자 이상 입력하세요' : '검색 결과 없음'}
+              onInputChange={(_, val, reason) => {
+                if (reason === 'input' || reason === 'clear') setSearchInput(val);
+              }}
+              onChange={(_, opt) => {
+                if (!opt) { setForm((prev) => ({ ...prev, name: '', latitude: '', longitude: '', address: '' })); return; }
+                setForm((prev) => ({
+                  ...prev,
+                  name: opt.name || opt.display_name.split(',')[0].trim(),
+                  latitude: opt.lat,
+                  longitude: opt.lon,
+                  address: opt.display_name,
+                }));
+                setFormErrors((prev) => ({ ...prev, name: '', latitude: '' }));
+              }}
+              renderOption={(props, opt) => (
+                <li {...props} key={opt.place_id}>
+                  <Box sx={{ overflow: 'hidden', width: '100%' }}>
+                    <Typography variant="body2" fontWeight={500}>
+                      {opt.name || opt.display_name.split(',')[0].trim()}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary"
+                      sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {opt.display_name}
+                    </Typography>
+                  </Box>
+                </li>
+              )}
+              renderInput={(params) => (
                 <TextField
+                  {...params}
                   label="장소 검색"
                   fullWidth
                   size="small"
-                  onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                  error={!!formErrors.name}
-                  helperText={formErrors.name}
                   placeholder="장소명 또는 주소 검색"
+                  error={!!formErrors.name || !!formErrors.latitude}
+                  helperText={formErrors.name || formErrors.latitude}
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
+                      <>
+                        {searchLoading ? <CircularProgress size={16} /> : null}
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                  }}
                 />
-              </Autocomplete>
-            ) : (
-              <TextField
-                label="장소명"
-                fullWidth
-                size="small"
-                value={form.name}
-                onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                error={!!formErrors.name}
-                helperText={formErrors.name}
-              />
-            )}
+              )}
+            />
+
             {form.address && (
               <TextField
                 label="주소"
@@ -227,12 +262,9 @@ const WishlistPage = () => {
                 size="small"
                 value={form.address}
                 onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))}
-                InputProps={{ readOnly: false }}
               />
             )}
-            {formErrors.latitude && (
-              <Alert severity="warning" sx={{ py: 0.5 }}>{formErrors.latitude}</Alert>
-            )}
+
             <TextField
               label="메모 (선택)"
               fullWidth
