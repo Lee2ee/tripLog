@@ -1,35 +1,37 @@
-const FSQ_KEY = import.meta.env.VITE_FOURSQUARE_API_KEY || '';
+const TOMTOM_KEY = import.meta.env.VITE_TOMTOM_API_KEY || '';
 
 /**
- * 장소 검색: Foursquare(키 있을 때) → Photon(폴백)
+ * 장소 검색: TomTom(키 있을 때) → Photon(폴백)
  * 반환 형태: [{ id, name, detail, lat, lng }]
  */
 export async function searchPlaces(query) {
-  if (FSQ_KEY) {
-    console.log('[Search] Foursquare 사용, query:', query);
+  if (TOMTOM_KEY) {
+    console.log('[Search] TomTom 사용, query:', query);
     const res = await fetch(
-      `https://api.foursquare.com/v3/places/search?query=${encodeURIComponent(query)}&limit=6`,
-      { headers: { Authorization: `Bearer ${FSQ_KEY}`, Accept: 'application/json' } }
+      `https://api.tomtom.com/search/2/search/${encodeURIComponent(query)}.json?key=${TOMTOM_KEY}&limit=6&language=ko-KR`
     );
-    console.log('[Search] Foursquare 응답 status:', res.status);
+    console.log('[Search] TomTom 응답 status:', res.status);
     if (!res.ok) {
       const errText = await res.text();
-      console.error('[Search] Foursquare 오류:', errText);
-      throw new Error(`Foursquare ${res.status}`);
+      console.error('[Search] TomTom 오류:', errText);
+      throw new Error(`TomTom ${res.status}`);
     }
     const data = await res.json();
-    console.log('[Search] Foursquare 결과:', data.results?.length, '건');
-    return (data.results || []).map((r) => ({
-      id: r.fsq_id,
-      name: r.name,
-      detail: r.location?.formatted_address || '',
-      lat: r.geocodes?.main?.latitude,
-      lng: r.geocodes?.main?.longitude,
-    })).filter((r) => r.lat != null && r.lng != null);
+    console.log('[Search] TomTom 결과:', data.results?.length, '건');
+    return (data.results || [])
+      .filter((r) => r.position)
+      .map((r) => ({
+        id: r.id,
+        name: r.poi?.name || r.address?.freeformAddress || '',
+        detail: r.address?.freeformAddress || '',
+        lat: r.position.lat,
+        lng: r.position.lon,
+      }))
+      .filter((r) => r.name);
   }
 
   // Photon 폴백
-  console.log('[Search] VITE_FOURSQUARE_API_KEY 미설정 → Photon 폴백, query:', query);
+  console.log('[Search] VITE_TOMTOM_API_KEY 미설정 → Photon 폴백, query:', query);
   const res = await fetch(
     `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6`
   );
