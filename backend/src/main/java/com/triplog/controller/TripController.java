@@ -79,6 +79,16 @@ public class TripController {
         return ResponseEntity.ok(ApiResponse.success(trip));
     }
 
+    @PatchMapping("/{id}/country")
+    public ResponseEntity<ApiResponse<TripResponse>> updateCountry(
+            @PathVariable UUID id,
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        String country = body.getOrDefault("country", "");
+        TripResponse trip = tripService.updateCountry(id, country, userDetails.getUsername());
+        return ResponseEntity.ok(ApiResponse.success(trip));
+    }
+
     // ── 공개 여행 (인증 불필요) ────────────────────────────────────────
 
     @GetMapping("/public")

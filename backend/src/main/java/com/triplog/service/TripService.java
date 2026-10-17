@@ -179,6 +179,15 @@ public class TripService {
     }
 
     @Transactional
+    public TripResponse updateCountry(UUID tripId, String country, String email) {
+        Trip trip = findTripById(tripId);
+        requireOwner(trip, email, "국가 수정은 소유자만 할 수 있습니다.");
+        trip.setCountry(country);
+        tripRepository.save(trip);
+        return mapToTripSummary(trip, email);
+    }
+
+    @Transactional
     public void deleteTrip(UUID tripId, String email) {
         Trip trip = findTripById(tripId);
         requireOwner(trip, email, "Only the trip owner can delete this trip");

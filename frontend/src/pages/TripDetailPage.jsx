@@ -41,6 +41,8 @@ import CloseIcon from '@mui/icons-material/Close';
 import ShareIcon from '@mui/icons-material/Share';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import { TRIP_TAGS } from '../components/Trip/CreateTripDialog';
+import { COUNTRIES, getCountryLabel } from '../constants/countries';
+import PublicIcon2 from '@mui/icons-material/Language';
 
 const TRANSPORT_ICONS = {
   DRIVING:   { icon: <DirectionsCarIcon sx={{ fontSize: 14 }} />,     color: '#1976d2', label: '자동차' },
@@ -489,6 +491,9 @@ const TripDetailPage = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [deleteLoading, setDeleteLoading] = useState(null);
   const [visibilityLoading, setVisibilityLoading] = useState(false);
+  const [countryEdit, setCountryEdit] = useState(false);
+  const [countryValue, setCountryValue] = useState('');
+  const [countrySaving, setCountrySaving] = useState(false);
   const [editingLoc, setEditingLoc] = useState(null);
   const [selectedLocId, setSelectedLocId] = useState(null); // 갤러리에 표시할 장소
   const [memberDialogOpen, setMemberDialogOpen] = useState(false);
@@ -695,6 +700,24 @@ const TripDetailPage = () => {
     }
   };
 
+  const openCountryEdit = () => {
+    setCountryValue(trip.country || '');
+    setCountryEdit(true);
+  };
+
+  const handleSaveCountry = async () => {
+    setCountrySaving(true);
+    try {
+      const res = await axiosInstance.patch(`/trips/${id}/country`, { country: countryValue });
+      setTrip((prev) => ({ ...prev, country: res.data.data.country }));
+      setCountryEdit(false);
+    } catch (err) {
+      setError(err.response?.data?.message || '국가 수정에 실패했습니다.');
+    } finally {
+      setCountrySaving(false);
+    }
+  };
+
   const handleLeave = async () => {
     if (!window.confirm('이 여행에서 나가시겠습니까?')) return;
     try {
@@ -786,6 +809,11 @@ const TripDetailPage = () => {
           {isOwner && (
             <Button variant="outlined" size="small" startIcon={<LocalOfferIcon />} onClick={openTagDialog}>
               태그
+            </Button>
+          )}
+          {isOwner && (
+            <Button variant="outlined" size="small" startIcon={<PublicIcon2 />} onClick={openCountryEdit}>
+              {trip.country ? getCountryLabel(trip.country) : '국가 설정'}
             </Button>
           )}
           <Button
@@ -1049,6 +1077,33 @@ const TripDetailPage = () => {
           <Button onClick={() => setTagDialogOpen(false)} disabled={tagSaving}>취소</Button>
           <Button variant="contained" onClick={handleSaveTags} disabled={tagSaving}>
             {tagSaving ? <CircularProgress size={20} color="inherit" /> : '저장'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 국가 수정 다이얼로그 */}
+      <Dialog open={countryEdit} onClose={() => setCountryEdit(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>국가 설정</DialogTitle>
+        <DialogContent>
+          <TextField
+            select
+            label="국가"
+            value={countryValue}
+            onChange={(e) => setCountryValue(e.target.value)}
+            fullWidth
+            size="small"
+            sx={{ mt: 1 }}
+          >
+            <MenuItem value=""><em>없음</em></MenuItem>
+            {COUNTRIES.map((c) => (
+              <MenuItem key={c.code} value={c.code}>{c.label}</MenuItem>
+            ))}
+          </TextField>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCountryEdit(false)} disabled={countrySaving}>취소</Button>
+          <Button variant="contained" onClick={handleSaveCountry} disabled={countrySaving}>
+            {countrySaving ? <CircularProgress size={20} color="inherit" /> : '저장'}
           </Button>
         </DialogActions>
       </Dialog>
