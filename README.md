@@ -72,10 +72,16 @@ TripLog는 여행 경로를 날짜별로 관리하고, 구글 지도 위에 마�
 
 ### 지도 & 경로
 - 날짜별 장소 추가 (이름, 위도, 경도, 순서)
+- **장소 검색**: Google Places API (New) → TomTom → Photon 순서로 폴백. 검색 버튼 클릭 시에만 호출하고 세션 캐시로 중복 호출 방지
 - 구글 지도 위 번호 마커 표시
 - 마커 클릭 시 장소 정보 팝업
 - Polyline으로 경로 연결
 - Haversine 공식으로 총 이동 거리 계산
+
+### 여행 설정
+- 국가 설정 (PATCH `/api/trips/{id}/country`) — 장소 검색 시 해당 국가로 자동 필터링
+- 태그 설정 (PATCH `/api/trips/{id}/tags`)
+- 공개/비공개 전환 (PATCH `/api/trips/{id}/visibility`)
 
 ### 갤러리 게시판
 - 여행별 이미지 다중 업로드 (서버 로컬 저장)
@@ -304,7 +310,10 @@ npm run dev
 
 | 키 | 설명 |
 |----|------|
-| `VITE_GOOGLE_MAPS_API_KEY` | Google Maps JavaScript API 키 |
+| `VITE_GOOGLE_MAPS_API_KEY` | Google Maps JavaScript API 키 (지도 표시 + Places API 장소 검색) |
+| `VITE_TOMTOM_API_KEY` | TomTom API 키 (Google Places 실패 시 폴백, 선택) |
+
+> Google Maps API 키에는 **Maps JavaScript API**와 **Places API (New)** 가 모두 활성화되어 있어야 합니다.
 
 ---
 

@@ -27,3 +27,4 @@ Thumbs.db
 # ── Markdown (README.md 제외) ────────────────────────
 *.md
 !README.md
+!INTERVIEW.md
