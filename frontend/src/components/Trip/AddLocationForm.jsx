@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box, TextField, Button, Paper, Typography, CircularProgress,
   Alert, Divider, MenuItem, Chip, ToggleButtonGroup, ToggleButton, Tooltip,
-  Autocomplete,
+  Autocomplete, IconButton,
 } from '@mui/material';
 import { searchPlaces } from '../../api/placeSearch';
 import AddLocationAltIcon from '@mui/icons-material/AddLocationAlt';
@@ -47,6 +47,7 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0, co
   const [searchInput, setSearchInput] = useState('');
   const [searchOptions, setSearchOptions] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const [manualCoord, setManualCoord] = useState('');
   const [manualCoordError, setManualCoordError] = useState('');
 
@@ -65,6 +66,7 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0, co
     setName(''); setPin(null);
     setManualCoord(''); setManualCoordError('');
     setNameError(''); setPinError('');
+    setSearchInput(''); setSearchOptions([]); setHasSearched(false);
     setAcKey((k) => k + 1);
   };
 
@@ -77,24 +79,21 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0, co
     else { setPin(null); setManualCoordError('올바른 형식이 아닙니다 (예: 33.5917, 130.4004)'); }
   };
 
-  useEffect(() => {
-    if (!searchInput.trim() || searchInput.length < 2) {
+  const handleSearch = async () => {
+    const q = searchInput.trim();
+    if (!q) return;
+    setSearchLoading(true);
+    setSearchOptions([]);
+    try {
+      const results = await searchPlaces(q, country);
+      setSearchOptions(results);
+    } catch {
       setSearchOptions([]);
-      return;
+    } finally {
+      setSearchLoading(false);
+      setHasSearched(true);
     }
-    const timer = setTimeout(async () => {
-      setSearchLoading(true);
-      try {
-        const results = await searchPlaces(searchInput, country);
-        setSearchOptions(results);
-      } catch {
-        setSearchOptions([]);
-      } finally {
-        setSearchLoading(false);
-      }
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [searchInput]);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -189,9 +188,13 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0, co
             getOptionLabel={(opt) => typeof opt === 'string' ? opt : opt.name || ''}
             filterOptions={(x) => x}
             loading={searchLoading}
-            noOptionsText={searchInput.length < 2 ? '2글자 이상 입력하세요' : '검색 결과 없음'}
+            noOptionsText={!searchInput.trim() ? '장소명을 입력하세요' : !hasSearched ? '🔍 검색 버튼을 눌러주세요' : '검색 결과 없음'}
             onInputChange={(_, val, reason) => {
-              if (reason === 'input' || reason === 'clear') setSearchInput(val);
+              if (reason === 'input' || reason === 'clear') {
+                setSearchInput(val);
+                setHasSearched(false);
+                if (!val) setSearchOptions([]);
+              }
             }}
             onChange={(_, opt) => {
               if (!opt) { setPin(null); setName(''); return; }
@@ -218,7 +221,14 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0, co
                 size="small"
                 placeholder="예: 경복궁, 에펠탑..."
                 error={!!nameError || !!pinError}
-                helperText={nameError || pinError || '장소를 검색하면 좌표가 자동 입력됩니다'}
+                helperText={nameError || pinError || '장소명 입력 후 검색 버튼을 누르세요'}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && searchOptions.length === 0 && !searchLoading) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleSearch();
+                  }
+                }}
                 InputProps={{
                   ...params.InputProps,
                   startAdornment: (
@@ -229,7 +239,12 @@ const AddLocationForm = ({ tripId, dayId, onLocationAdded, existingCount = 0, co
                   ),
                   endAdornment: (
                     <>
-                      {searchLoading ? <CircularProgress size={16} /> : null}
+                      {searchLoading
+                        ? <CircularProgress size={16} />
+                        : <IconButton size="small" onClick={handleSearch} disabled={!searchInput.trim()}>
+                            <SearchIcon fontSize="small" />
+                          </IconButton>
+                      }
                       {params.InputProps.endAdornment}
                     </>
                   ),

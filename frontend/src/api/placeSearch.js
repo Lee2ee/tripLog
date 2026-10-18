@@ -1,10 +1,15 @@
 const TOMTOM_KEY = import.meta.env.VITE_TOMTOM_API_KEY || '';
 
+// 세션 캐시: 같은 검색어는 API 재호출 없이 재사용
+const cache = new Map();
+
 /**
  * 장소 검색: TomTom(키 있을 때) → Photon(폴백)
  * 반환 형태: [{ id, name, detail, lat, lng }]
  */
 export async function searchPlaces(query, countryCode = '') {
+  const cacheKey = `${query.trim().toLowerCase()}|${countryCode}`;
+  if (cache.has(cacheKey)) return cache.get(cacheKey);
   if (TOMTOM_KEY) {
     const countryParam = countryCode ? `&countrySet=${countryCode}` : '';
     console.log('[Search] TomTom 사용, query:', query, '국가:', countryCode || '전체');
@@ -19,7 +24,7 @@ export async function searchPlaces(query, countryCode = '') {
     }
     const data = await res.json();
     console.log('[Search] TomTom 결과:', data.results?.length, '건');
-    return (data.results || [])
+    const results = (data.results || [])
       .filter((r) => r.position)
       .map((r) => ({
         id: r.id,
@@ -29,6 +34,8 @@ export async function searchPlaces(query, countryCode = '') {
         lng: r.position.lon,
       }))
       .filter((r) => r.name);
+    cache.set(cacheKey, results);
+    return results;
   }
 
   // Photon 폴백
@@ -38,7 +45,7 @@ export async function searchPlaces(query, countryCode = '') {
   );
   if (!res.ok) throw new Error(`Photon ${res.status}`);
   const data = await res.json();
-  return (data.features || []).map((f) => {
+  const results = (data.features || []).map((f) => {
     const p = f.properties;
     return {
       id: `${p.osm_id}-${p.osm_type}`,
@@ -48,4 +55,6 @@ export async function searchPlaces(query, countryCode = '') {
       lng: f.geometry.coordinates[0],
     };
   }).filter((r) => r.name);
+  cache.set(cacheKey, results);
+  return results;
 }
